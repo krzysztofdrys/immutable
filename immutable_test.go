@@ -1522,7 +1522,7 @@ func ExampleMapBuilder_Delete() {
 
 func TestInternalSortedMapLeafNode(t *testing.T) {
 	RunRandom(t, "NoSplit", func(t *testing.T, rand *rand.Rand) {
-		var cmpr intComparer
+		var cmpr DefaultComparer[int]
 		var node sortedMapNode[int, int] = &sortedMapLeafNode[int, int]{}
 		var keys []int
 		for _, i := range rand.Perm(32) {
@@ -1557,15 +1557,15 @@ func TestInternalSortedMapLeafNode(t *testing.T) {
 	})
 
 	RunRandom(t, "Overwrite", func(t *testing.T, rand *rand.Rand) {
-		var cmpr intComparer
+		var cmpr DefaultComparer[int]
 		var node sortedMapNode[int, int] = &sortedMapLeafNode[int, int]{}
 		for _, i := range rand.Perm(32) {
 			var resized bool
-			node, _ = node.set(i, i*2, &cmpr, false, &resized)
+			node, _ = node.set(i, i*2, cmpr, false, &resized)
 		}
 		for _, i := range rand.Perm(32) {
 			var resized bool
-			node, _ = node.set(i, i*3, &cmpr, false, &resized)
+			node, _ = node.set(i, i*3, cmpr, false, &resized)
 			if resized {
 				t.Fatal("expected no resize")
 			}
@@ -1573,7 +1573,7 @@ func TestInternalSortedMapLeafNode(t *testing.T) {
 
 		// Verify all overwritten key/value pairs in node.
 		for i := 0; i < 32; i++ {
-			if v, ok := node.get(i, &cmpr); !ok || v != i*3 {
+			if v, ok := node.get(i, cmpr); !ok || v != i*3 {
 				t.Fatalf("get(%d)=<%v,%v>", i, v, ok)
 			}
 		}
@@ -1581,11 +1581,11 @@ func TestInternalSortedMapLeafNode(t *testing.T) {
 
 	t.Run("Split", func(t *testing.T) {
 		// Fill leaf node.
-		var cmpr intComparer
+		var cmpr DefaultComparer[int]
 		var node sortedMapNode[int, int] = &sortedMapLeafNode[int, int]{}
 		for i := 0; i < 32; i++ {
 			var resized bool
-			node, _ = node.set(i, i*10, &cmpr, false, &resized)
+			node, _ = node.set(i, i*10, cmpr, false, &resized)
 		}
 
 		// Add one more and expect split.
@@ -1630,7 +1630,7 @@ func TestInternalSortedMapBranchNode(t *testing.T) {
 		sort.Ints(keys[:2]) // ensure first two keys are sorted for initial insert.
 
 		// Initialize branch with two leafs.
-		var cmpr intComparer
+		var cmpr DefaultComparer[int]
 		leaf0 := &sortedMapLeafNode[int, int]{entries: []mapEntry[int, int]{{key: keys[0], value: keys[0] * 10}}}
 		leaf1 := &sortedMapLeafNode[int, int]{entries: []mapEntry[int, int]{{key: keys[1], value: keys[1] * 10}}}
 		var node sortedMapNode[int, int] = newSortedMapBranchNode[int, int](leaf0, leaf1)
@@ -1671,7 +1671,7 @@ func TestInternalSortedMapBranchNode(t *testing.T) {
 
 	t.Run("Split", func(t *testing.T) {
 		// Generate leaf nodes.
-		var cmpr intComparer
+		var cmpr DefaultComparer[int]
 		children := make([]sortedMapNode[int, int], 32)
 		for i := range children {
 			leaf := &sortedMapLeafNode[int, int]{entries: make([]mapEntry[int, int], 32)}
@@ -1731,7 +1731,7 @@ func TestInternalSortedMapBranchNode(t *testing.T) {
 
 func TestSortedMap_Get(t *testing.T) {
 	t.Run("Empty", func(t *testing.T) {
-		m := NewSortedMap[int, int](&intComparer{})
+		m := NewSortedMap[int, int](&DefaultComparer[int]{})
 		if v, ok := m.Get(100); ok {
 			t.Fatalf("unexpected value: <%v,%v>", v, ok)
 		}
@@ -1740,7 +1740,7 @@ func TestSortedMap_Get(t *testing.T) {
 
 func TestSortedMap_Set(t *testing.T) {
 	t.Run("Simple", func(t *testing.T) {
-		m := NewSortedMap[int, string](&intComparer{})
+		m := NewSortedMap[int, string](&DefaultComparer[int]{})
 		m = m.Set(100, "foo")
 		if v, ok := m.Get(100); !ok || v != "foo" {
 			t.Fatalf("unexpected value: <%v,%v>", v, ok)
@@ -1751,7 +1751,7 @@ func TestSortedMap_Set(t *testing.T) {
 
 	t.Run("Small", func(t *testing.T) {
 		const n = 1000
-		m := NewSortedMap[int, int](&intComparer{})
+		m := NewSortedMap[int, int](&DefaultComparer[int]{})
 		for i := 0; i < n; i++ {
 			m = m.Set(i, i+1)
 		}
@@ -1768,7 +1768,7 @@ func TestSortedMap_Set(t *testing.T) {
 		}
 
 		const n = 1000000
-		m := NewSortedMap[int, int](&intComparer{})
+		m := NewSortedMap[int, int](&DefaultComparer[int]{})
 		for i := 0; i < n; i++ {
 			m = m.Set(i, i+1)
 		}
@@ -1780,7 +1780,7 @@ func TestSortedMap_Set(t *testing.T) {
 	})
 
 	t.Run("StringKeys", func(t *testing.T) {
-		m := NewSortedMap[string, string](&stringComparer{})
+		m := NewSortedMap[string, string](DefaultComparer[string]{})
 		m = m.Set("foo", "bar")
 		m = m.Set("baz", "bat")
 		m = m.Set("", "EMPTY")
@@ -1832,7 +1832,7 @@ func TestSortedMap_Set(t *testing.T) {
 // Ensure map can support overwrites as it expands.
 func TestSortedMap_Overwrite(t *testing.T) {
 	const n = 1000
-	m := NewSortedMap[int, int](&intComparer{})
+	m := NewSortedMap[int, int](&DefaultComparer[int]{})
 	for i := 0; i < n; i++ {
 		// Set original value.
 		m = m.Set(i, i)
@@ -1853,7 +1853,7 @@ func TestSortedMap_Overwrite(t *testing.T) {
 
 func TestSortedMap_Delete(t *testing.T) {
 	t.Run("Empty", func(t *testing.T) {
-		m := NewSortedMap[int, int](&intComparer{})
+		m := NewSortedMap[int, int](&DefaultComparer[int]{})
 		m = m.Delete(100)
 		if n := m.Len(); n != 0 {
 			t.Fatalf("SortedMap.Len()=%d, expected 0", n)
@@ -1861,7 +1861,7 @@ func TestSortedMap_Delete(t *testing.T) {
 	})
 
 	t.Run("Simple", func(t *testing.T) {
-		m := NewSortedMap[int, string](&intComparer{})
+		m := NewSortedMap[int, string](&DefaultComparer[int]{})
 		m = m.Set(100, "foo")
 		if v, ok := m.Get(100); !ok || v != "foo" {
 			t.Fatalf("unexpected value: <%v,%v>", v, ok)
@@ -1874,7 +1874,7 @@ func TestSortedMap_Delete(t *testing.T) {
 
 	t.Run("Small", func(t *testing.T) {
 		const n = 1000
-		m := NewSortedMap[int, int](&intComparer{})
+		m := NewSortedMap[int, int](&DefaultComparer[int]{})
 		for i := 0; i < n; i++ {
 			m = m.Set(i, i+1)
 		}
@@ -1900,7 +1900,7 @@ func TestSortedMap_Delete(t *testing.T) {
 		}
 
 		const n = 1000000
-		m := NewSortedMap[int, int](&intComparer{})
+		m := NewSortedMap[int, int](&DefaultComparer[int]{})
 		for i := 0; i < n; i++ {
 			m = m.Set(i, i+1)
 		}
@@ -1953,7 +1953,7 @@ func TestSortedMap_Delete(t *testing.T) {
 func TestSortedMap_Iterator(t *testing.T) {
 	t.Run("Empty", func(t *testing.T) {
 		t.Run("First", func(t *testing.T) {
-			itr := NewSortedMap[int, int](&intComparer{}).Iterator()
+			itr := NewSortedMap[int, int](&DefaultComparer[int]{}).Iterator()
 			itr.First()
 			if k, v, ok := itr.Next(); k != 0 || v != 0 || ok {
 				t.Fatalf("SortedMapIterator.Next()=<%v,%v,%v>, expected <0,0,false>", k, v, ok)
@@ -1961,7 +1961,7 @@ func TestSortedMap_Iterator(t *testing.T) {
 		})
 
 		t.Run("Last", func(t *testing.T) {
-			itr := NewSortedMap[int, int](&intComparer{}).Iterator()
+			itr := NewSortedMap[int, int](&DefaultComparer[int]{}).Iterator()
 			itr.Last()
 			if k, v, ok := itr.Prev(); k != 0 || v != 0 || ok {
 				t.Fatalf("SortedMapIterator.Prev()=<%v,%v, %v>, expected <0,0,false>", k, v, ok)
@@ -1969,7 +1969,7 @@ func TestSortedMap_Iterator(t *testing.T) {
 		})
 
 		t.Run("Seek", func(t *testing.T) {
-			itr := NewSortedMap[string, int](&stringComparer{}).Iterator()
+			itr := NewSortedMap[string, int](DefaultComparer[string]{}).Iterator()
 			itr.Seek("foo")
 			if k, v, ok := itr.Next(); k != "" || v != 0 || ok {
 				t.Fatalf("SortedMapIterator.Next()=<%v,%v,%v>, expected false", k, v, ok)
@@ -1979,7 +1979,7 @@ func TestSortedMap_Iterator(t *testing.T) {
 
 	t.Run("Seek", func(t *testing.T) {
 		const n = 100
-		m := NewSortedMap[string, int](&stringComparer{})
+		m := NewSortedMap[string, int](DefaultComparer[string]{})
 		for i := 0; i < n; i += 2 {
 			m = m.Set(fmt.Sprintf("%04d", i), i)
 		}
@@ -2076,39 +2076,50 @@ func testHasher[T any](t *testing.T, v T, h Hasher[T]) {
 	}
 }
 
-func TestNewComparer(t *testing.T) {
+func TestComparer(t *testing.T) {
 	t.Run("builtin", func(t *testing.T) {
-		t.Run("int", func(t *testing.T) { testNewComparer(t, int(100), int(101)) })
-		t.Run("int8", func(t *testing.T) { testNewComparer(t, int8(100), int8(101)) })
-		t.Run("int16", func(t *testing.T) { testNewComparer(t, int16(100), int16(101)) })
-		t.Run("int32", func(t *testing.T) { testNewComparer(t, int32(100), int32(101)) })
-		t.Run("int64", func(t *testing.T) { testNewComparer(t, int64(100), int64(101)) })
+		t.Run("int", func(t *testing.T) { testDefaultComparer(t, int(100), int(101)) })
+		t.Run("int8", func(t *testing.T) { testDefaultComparer(t, int8(100), int8(101)) })
+		t.Run("int16", func(t *testing.T) { testDefaultComparer(t, int16(100), int16(101)) })
+		t.Run("int32", func(t *testing.T) { testDefaultComparer(t, int32(100), int32(101)) })
+		t.Run("int64", func(t *testing.T) { testDefaultComparer(t, int64(100), int64(101)) })
 
-		t.Run("uint", func(t *testing.T) { testNewComparer(t, uint(100), uint(101)) })
-		t.Run("uint8", func(t *testing.T) { testNewComparer(t, uint8(100), uint8(101)) })
-		t.Run("uint16", func(t *testing.T) { testNewComparer(t, uint16(100), uint16(101)) })
-		t.Run("uint32", func(t *testing.T) { testNewComparer(t, uint32(100), uint32(101)) })
-		t.Run("uint64", func(t *testing.T) { testNewComparer(t, uint64(100), uint64(101)) })
+		t.Run("uint", func(t *testing.T) { testDefaultComparer(t, uint(100), uint(101)) })
+		t.Run("uint8", func(t *testing.T) { testDefaultComparer(t, uint8(100), uint8(101)) })
+		t.Run("uint16", func(t *testing.T) { testDefaultComparer(t, uint16(100), uint16(101)) })
+		t.Run("uint32", func(t *testing.T) { testDefaultComparer(t, uint32(100), uint32(101)) })
+		t.Run("uint64", func(t *testing.T) { testDefaultComparer(t, uint64(100), uint64(101)) })
 
-		t.Run("string", func(t *testing.T) { testNewComparer(t, "bar", "foo") })
-		t.Run("byteSlice", func(t *testing.T) { testNewComparer(t, []byte("bar"), []byte("foo")) })
+		t.Run("string", func(t *testing.T) { testDefaultComparer(t, "bar", "foo") })
+		t.Run("byteSlice", func(t *testing.T) { testComparer[[]byte](t, &byteSliceComparer{}, []byte("bar"), []byte("foo")) })
 	})
 
 	t.Run("reflection", func(t *testing.T) {
 		type Int int
-		t.Run("int", func(t *testing.T) { testNewComparer(t, Int(100), Int(101)) })
+		t.Run("int", func(t *testing.T) { testDefaultComparer(t, Int(100), Int(101)) })
 
 		type Uint uint
-		t.Run("uint", func(t *testing.T) { testNewComparer(t, Uint(100), Uint(101)) })
+		t.Run("uint", func(t *testing.T) { testDefaultComparer(t, Uint(100), Uint(101)) })
 
 		type String string
-		t.Run("string", func(t *testing.T) { testNewComparer(t, String("bar"), String("foo")) })
+		t.Run("string", func(t *testing.T) { testDefaultComparer(t, String("bar"), String("foo")) })
 	})
 }
 
-func testNewComparer(t *testing.T, x, y interface{}) {
+func testDefaultComparer[T orderable](t *testing.T, x, y T) {
 	t.Helper()
-	c := NewComparer(x)
+	c := &DefaultComparer[T]{}
+	if c.Compare(x, y) != -1 {
+		t.Fatal("expected comparer LT")
+	} else if c.Compare(x, x) != 0 {
+		t.Fatal("expected comparer EQ")
+	} else if c.Compare(y, x) != 1 {
+		t.Fatal("expected comparer GT")
+	}
+}
+
+func testComparer[T any](t *testing.T, c Comparer[T], x, y T) {
+	t.Helper()
 	if c.Compare(x, y) != -1 {
 		t.Fatal("expected comparer LT")
 	} else if c.Compare(x, x) != 0 {
@@ -2128,8 +2139,8 @@ type TSortedMap struct {
 
 func NewTSortedMap() *TSortedMap {
 	return &TSortedMap{
-		im:      NewSortedMap[int, int](nil),
-		builder: NewSortedMapBuilder[int, int](nil),
+		im:      NewSortedMap[int, int](DefaultComparer[int]{}),
+		builder: NewSortedMapBuilder[int, int](DefaultComparer[int]{}),
 		std:     make(map[int]int),
 	}
 }
@@ -2249,7 +2260,7 @@ func (m *TSortedMap) validateBackwardIterator(itr *SortedMapIterator[int, int]) 
 
 func BenchmarkSortedMap_Set(b *testing.B) {
 	b.ReportAllocs()
-	m := NewSortedMap[int, int](nil)
+	m := NewSortedMap[int, int](DefaultComparer[int]{})
 	for i := 0; i < b.N; i++ {
 		m = m.Set(i, i)
 	}
@@ -2258,7 +2269,7 @@ func BenchmarkSortedMap_Set(b *testing.B) {
 func BenchmarkSortedMap_Delete(b *testing.B) {
 	const n = 10000
 
-	m := NewSortedMap[int, int](nil)
+	m := NewSortedMap[int, int](DefaultComparer[int]{})
 	for i := 0; i < n; i++ {
 		m = m.Set(i, i)
 	}
@@ -2272,7 +2283,7 @@ func BenchmarkSortedMap_Delete(b *testing.B) {
 
 func BenchmarkSortedMap_Iterator(b *testing.B) {
 	const n = 10000
-	m := NewSortedMap[int, int](nil)
+	m := NewSortedMap[int, int](DefaultComparer[int]{})
 	for i := 0; i < 10000; i++ {
 		m = m.Set(i, i)
 	}
@@ -2302,7 +2313,7 @@ func BenchmarkSortedMap_Iterator(b *testing.B) {
 
 func BenchmarkSortedMapBuilder_Set(b *testing.B) {
 	b.ReportAllocs()
-	builder := NewSortedMapBuilder[int, int](nil)
+	builder := NewSortedMapBuilder[int, int](DefaultComparer[int]{})
 	for i := 0; i < b.N; i++ {
 		builder.Set(i, i)
 	}
@@ -2311,7 +2322,7 @@ func BenchmarkSortedMapBuilder_Set(b *testing.B) {
 func BenchmarkSortedMapBuilder_Delete(b *testing.B) {
 	const n = 1000000
 
-	builder := NewSortedMapBuilder[int, int](nil)
+	builder := NewSortedMapBuilder[int, int](DefaultComparer[int]{})
 	for i := 0; i < n; i++ {
 		builder.Set(i, i)
 	}
@@ -2324,7 +2335,7 @@ func BenchmarkSortedMapBuilder_Delete(b *testing.B) {
 }
 
 func ExampleSortedMap_Set() {
-	m := NewSortedMap[string, interface{}](nil)
+	m := NewSortedMap[string, interface{}](DefaultComparer[string]{})
 	m = m.Set("foo", "bar")
 	m = m.Set("baz", 100)
 
@@ -2343,7 +2354,7 @@ func ExampleSortedMap_Set() {
 }
 
 func ExampleSortedMap_Delete() {
-	m := NewSortedMap[string, interface{}](nil)
+	m := NewSortedMap[string, interface{}](DefaultComparer[string]{})
 	m = m.Set("foo", "bar")
 	m = m.Set("baz", 100)
 	m = m.Delete("baz")
@@ -2359,7 +2370,7 @@ func ExampleSortedMap_Delete() {
 }
 
 func ExampleSortedMap_Iterator() {
-	m := NewSortedMap[string, int](nil)
+	m := NewSortedMap[string, int](DefaultComparer[string]{})
 	m = m.Set("strawberry", 900)
 	m = m.Set("kiwi", 300)
 	m = m.Set("apple", 100)
@@ -2388,7 +2399,7 @@ func ExampleSortedMap_Iterator() {
 }
 
 func ExampleSortedMapBuilder_Set() {
-	b := NewSortedMapBuilder[string, interface{}](nil)
+	b := NewSortedMapBuilder[string, interface{}](DefaultComparer[string]{})
 	b.Set("foo", "bar")
 	b.Set("baz", 100)
 
@@ -2408,7 +2419,7 @@ func ExampleSortedMapBuilder_Set() {
 }
 
 func ExampleSortedMapBuilder_Delete() {
-	b := NewSortedMapBuilder[string, interface{}](nil)
+	b := NewSortedMapBuilder[string, interface{}](DefaultComparer[string]{})
 	b.Set("foo", "bar")
 	b.Set("baz", 100)
 	b.Delete("baz")

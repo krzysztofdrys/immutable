@@ -1564,13 +1564,13 @@ const (
 type SortedMap[K any, V any] struct {
 	size     int                 // total number of key/value pairs
 	root     sortedMapNode[K, V] // root of b+tree
-	comparer Comparer
+	comparer Comparer[K]
 }
 
 // NewSortedMap returns a new instance of SortedMap. If comparer is nil then
 // a default comparer is set after the first key is inserted. Default comparers
 // exist for int, string, and byte slice keys.
-func NewSortedMap[K any, V any](comparer Comparer) *SortedMap[K, V] {
+func NewSortedMap[K any, V any](comparer Comparer[K]) *SortedMap[K, V] {
 	return &SortedMap[K, V]{
 		comparer: comparer,
 	}
@@ -1598,9 +1598,6 @@ func (m *SortedMap[K, V]) Set(key K, value V) *SortedMap[K, V] {
 func (m *SortedMap[K, V]) set(key K, value V, mutable bool) *SortedMap[K, V] {
 	// Set a comparer on the first value if one does not already exist.
 	comparer := m.comparer
-	if comparer == nil {
-		comparer = NewComparer(key)
-	}
 
 	// Create copy, if necessary.
 	other := m
@@ -1683,7 +1680,7 @@ type SortedMapBuilder[K any, V any] struct {
 }
 
 // NewSortedMapBuilder returns a new instance of SortedMapBuilder.
-func NewSortedMapBuilder[K any, V any](comparer Comparer) *SortedMapBuilder[K, V] {
+func NewSortedMapBuilder[K any, V any](comparer Comparer[K]) *SortedMapBuilder[K, V] {
 	return &SortedMapBuilder[K, V]{m: NewSortedMap[K, V](comparer)}
 }
 
@@ -1729,10 +1726,10 @@ func (b *SortedMapBuilder[K, V]) Iterator() *SortedMapIterator[K, V] {
 // sortedMapNode represents a branch or leaf node in the sorted map.
 type sortedMapNode[K any, V any] interface {
 	minKey() K
-	indexOf(key K, c Comparer) int
-	get(key K, c Comparer) (value V, ok bool)
-	set(key K, value V, c Comparer, mutable bool, resized *bool) (sortedMapNode[K, V], sortedMapNode[K, V])
-	delete(key K, c Comparer, mutable bool, resized *bool) sortedMapNode[K, V]
+	indexOf(key K, c Comparer[K]) int
+	get(key K, c Comparer[K]) (value V, ok bool)
+	set(key K, value V, c Comparer[K], mutable bool, resized *bool) (sortedMapNode[K, V], sortedMapNode[K, V])
+	delete(key K, c Comparer[K], mutable bool, resized *bool) sortedMapNode[K, V]
 }
 
 var _ sortedMapNode[int, int] = (*sortedMapBranchNode[int, int])(nil)
@@ -1763,7 +1760,7 @@ func (n *sortedMapBranchNode[K, V]) minKey() K {
 }
 
 // indexOf returns the index of the key within the child nodes.
-func (n *sortedMapBranchNode[K, V]) indexOf(key K, c Comparer) int {
+func (n *sortedMapBranchNode[K, V]) indexOf(key K, c Comparer[K]) int {
 	if idx := sort.Search(len(n.elems), func(i int) bool { return c.Compare(n.elems[i].key, key) == 1 }); idx > 0 {
 		return idx - 1
 	}
@@ -1771,13 +1768,13 @@ func (n *sortedMapBranchNode[K, V]) indexOf(key K, c Comparer) int {
 }
 
 // get returns the value for the given key.
-func (n *sortedMapBranchNode[K, V]) get(key K, c Comparer) (value V, ok bool) {
+func (n *sortedMapBranchNode[K, V]) get(key K, c Comparer[K]) (value V, ok bool) {
 	idx := n.indexOf(key, c)
 	return n.elems[idx].node.get(key, c)
 }
 
 // set returns a copy of the node with the key set to the given value.
-func (n *sortedMapBranchNode[K, V]) set(key K, value V, c Comparer, mutable bool, resized *bool) (sortedMapNode[K, V], sortedMapNode[K, V]) {
+func (n *sortedMapBranchNode[K, V]) set(key K, value V, c Comparer[K], mutable bool, resized *bool) (sortedMapNode[K, V], sortedMapNode[K, V]) {
 	idx := n.indexOf(key, c)
 
 	// Delegate insert to child node.
@@ -1840,7 +1837,7 @@ func (n *sortedMapBranchNode[K, V]) set(key K, value V, c Comparer, mutable bool
 
 // delete returns a node with the key removed. Returns the same node if the key
 // does not exist. Returns nil if all child nodes are removed.
-func (n *sortedMapBranchNode[K, V]) delete(key K, c Comparer, mutable bool, resized *bool) sortedMapNode[K, V] {
+func (n *sortedMapBranchNode[K, V]) delete(key K, c Comparer[K], mutable bool, resized *bool) sortedMapNode[K, V] {
 	idx := n.indexOf(key, c)
 
 	// Return original node if child has not changed.
@@ -1888,7 +1885,7 @@ func (n *sortedMapBranchNode[K, V]) delete(key K, c Comparer, mutable bool, resi
 }
 
 type sortedMapBranchElem[K any, V any] struct {
-	key  interface{}
+	key  K
 	node sortedMapNode[K, V]
 }
 
@@ -1903,14 +1900,14 @@ func (n *sortedMapLeafNode[K, V]) minKey() K {
 }
 
 // indexOf returns the index of the given key.
-func (n *sortedMapLeafNode[K, V]) indexOf(key K, c Comparer) int {
+func (n *sortedMapLeafNode[K, V]) indexOf(key K, c Comparer[K]) int {
 	return sort.Search(len(n.entries), func(i int) bool {
 		return c.Compare(n.entries[i].key, key) != -1 // GTE
 	})
 }
 
 // get returns the value of the given key.
-func (n *sortedMapLeafNode[K, V]) get(key K, c Comparer) (value V, ok bool) {
+func (n *sortedMapLeafNode[K, V]) get(key K, c Comparer[K]) (value V, ok bool) {
 	idx := n.indexOf(key, c)
 
 	// If the index is beyond the entry count or the key is not equal then return 'not found'.
@@ -1924,7 +1921,7 @@ func (n *sortedMapLeafNode[K, V]) get(key K, c Comparer) (value V, ok bool) {
 
 // set returns a copy of node with the key set to the given value. If the update
 // causes the node to grow beyond the maximum size then it is split in two.
-func (n *sortedMapLeafNode[K, V]) set(key K, value V, c Comparer, mutable bool, resized *bool) (sortedMapNode[K, V], sortedMapNode[K, V]) {
+func (n *sortedMapLeafNode[K, V]) set(key K, value V, c Comparer[K], mutable bool, resized *bool) (sortedMapNode[K, V], sortedMapNode[K, V]) {
 	// Find the insertion index for the key.
 	idx := n.indexOf(key, c)
 	exists := idx < len(n.entries) && c.Compare(n.entries[idx].key, key) == 0
@@ -1977,7 +1974,7 @@ func (n *sortedMapLeafNode[K, V]) set(key K, value V, c Comparer, mutable bool, 
 
 // delete returns a copy of node with key removed. Returns the original node if
 // the key does not exist. Returns nil if the removed key is the last remaining key.
-func (n *sortedMapLeafNode[K, V]) delete(key K, c Comparer, mutable bool, resized *bool) sortedMapNode[K, V] {
+func (n *sortedMapLeafNode[K, V]) delete(key K, c Comparer[K], mutable bool, resized *bool) sortedMapNode[K, V] {
 	idx := n.indexOf(key, c)
 
 	// Return original node if key is not found.
@@ -2510,56 +2507,10 @@ func hashUint64(value uint64) uint32 {
 }
 
 // Comparer allows the comparison of two keys for the purpose of sorting.
-type Comparer interface {
+type Comparer[T any] interface {
 	// Returns -1 if a is less than b, returns 1 if a is greater than b,
 	// and returns 0 if a is equal to b.
-	Compare(a, b interface{}) int
-}
-
-// NewComparer returns the built-in comparer for a given key type.
-func NewComparer(key interface{}) Comparer {
-	// Attempt to use non-reflection based comparer first.
-	switch key.(type) {
-	case int:
-		return &intComparer{}
-	case int8:
-		return &int8Comparer{}
-	case int16:
-		return &int16Comparer{}
-	case int32:
-		return &int32Comparer{}
-	case int64:
-		return &int64Comparer{}
-	case uint:
-		return &uintComparer{}
-	case uint8:
-		return &uint8Comparer{}
-	case uint16:
-		return &uint16Comparer{}
-	case uint32:
-		return &uint32Comparer{}
-	case uint64:
-		return &uint64Comparer{}
-	case string:
-		return &stringComparer{}
-	case []byte:
-		return &byteSliceComparer{}
-	}
-
-	// Fallback to reflection-based comparer otherwise.
-	// This is used when caller wraps a type around a primitive type.
-	switch reflect.TypeOf(key).Kind() {
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return &reflectIntComparer{}
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		return &reflectUintComparer{}
-	case reflect.String:
-		return &reflectStringComparer{}
-	}
-
-	// If no comparers match then panic.
-	// This is a compile time issue so it should not return an error.
-	panic(fmt.Sprintf("immutable.NewComparer: must set comparer for %T type", key))
+	Compare(a, b T) int
 }
 
 // intComparer compares two integers. Implements Comparer.
@@ -2716,8 +2667,8 @@ type byteSliceComparer struct{}
 
 // Compare returns -1 if a is less than b, returns 1 if a is greater than b, and
 // returns 0 if a is equal to b. Panic if a or b is not a byte slice.
-func (c *byteSliceComparer) Compare(a, b interface{}) int {
-	return bytes.Compare(a.([]byte), b.([]byte))
+func (c *byteSliceComparer) Compare(a, b []byte) int {
+	return bytes.Compare(a, b)
 }
 
 // reflectIntComparer compares two int values using reflection. Implements Comparer.
