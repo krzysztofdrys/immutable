@@ -603,7 +603,7 @@ func ExampleListBuilder_Slice() {
 func TestInternal_mapNode_Overwrite(t *testing.T) {
 	const n = 1000
 	var h intHasher
-	var node mapNode = &mapArrayNode{}
+	var node mapNode[int, int] = &mapArrayNode[int, int]{}
 	for i := 0; i < n; i++ {
 		var resized bool
 		node = node.set(i, i, 0, h.Hash(i), &h, false, &resized)
@@ -638,10 +638,10 @@ func TestInternal_mapArrayNode(t *testing.T) {
 	// Ensure 8 or fewer elements stays in an array node.
 	t.Run("Append", func(t *testing.T) {
 		var h intHasher
-		n := &mapArrayNode{}
+		n := &mapArrayNode[int, int]{}
 		for i := 0; i < 8; i++ {
 			var resized bool
-			n = n.set(i*10, i, 0, h.Hash(i*10), &h, false, &resized).(*mapArrayNode)
+			n = n.set(i*10, i, 0, h.Hash(i*10), &h, false, &resized).(*mapArrayNode[int, int])
 			if !resized {
 				t.Fatal("expected resize")
 			}
@@ -657,10 +657,10 @@ func TestInternal_mapArrayNode(t *testing.T) {
 	// Ensure 8 or fewer elements stays in an array node when inserted in reverse.
 	t.Run("Prepend", func(t *testing.T) {
 		var h intHasher
-		n := &mapArrayNode{}
+		n := &mapArrayNode[int, int]{}
 		for i := 7; i >= 0; i-- {
 			var resized bool
-			n = n.set(i*10, i, 0, h.Hash(i*10), &h, false, &resized).(*mapArrayNode)
+			n = n.set(i*10, i, 0, h.Hash(i*10), &h, false, &resized).(*mapArrayNode[int, int])
 			if !resized {
 				t.Fatal("expected resize")
 			}
@@ -676,7 +676,7 @@ func TestInternal_mapArrayNode(t *testing.T) {
 	// Ensure array can transition between node types.
 	t.Run("Expand", func(t *testing.T) {
 		var h intHasher
-		var n mapNode = &mapArrayNode{}
+		var n mapNode[int, int] = &mapArrayNode[int, int]{}
 		for i := 0; i < 100; i++ {
 			var resized bool
 			n = n.set(i, i, 0, h.Hash(i), &h, false, &resized)
@@ -695,7 +695,7 @@ func TestInternal_mapArrayNode(t *testing.T) {
 	// Ensure deleting elements returns the correct new node.
 	RunRandom(t, "Delete", func(t *testing.T, rand *rand.Rand) {
 		var h intHasher
-		var n mapNode = &mapArrayNode{}
+		var n mapNode[int, int] = &mapArrayNode[int, int]{}
 		for i := 0; i < 8; i++ {
 			var resized bool
 			n = n.set(i*10, i, 0, h.Hash(i*10), &h, false, &resized)
@@ -726,7 +726,7 @@ func TestInternal_mapValueNode(t *testing.T) {
 		var h intHasher
 		var resized bool
 		n := newMapValueNode(h.Hash(2), 2, 3)
-		other := n.set(2, 4, 0, h.Hash(2), &h, false, &resized).(*mapValueNode)
+		other := n.set(2, 4, 0, h.Hash(2), &h, false, &resized).(*mapValueNode[int, int])
 		if other == n {
 			t.Fatal("expected new node")
 		} else if got, exp := other.keyHash, h.Hash(2); got != exp {
@@ -741,13 +741,13 @@ func TestInternal_mapValueNode(t *testing.T) {
 	})
 
 	t.Run("KeyHashEqual", func(t *testing.T) {
-		h := &mockHasher{
-			hash:  func(value interface{}) uint32 { return 1 },
-			equal: func(a, b interface{}) bool { return a.(int) == b.(int) },
+		h := &mockHasher[int]{
+			hash:  func(value int) uint32 { return 1 },
+			equal: func(a, b int) bool { return a == b },
 		}
 		var resized bool
 		n := newMapValueNode(h.Hash(2), 2, 3)
-		other := n.set(4, 5, 0, h.Hash(4), h, false, &resized).(*mapHashCollisionNode)
+		other := n.set(4, 5, 0, h.Hash(4), h, false, &resized).(*mapHashCollisionNode[int, int])
 		if got, exp := other.keyHash, h.Hash(2); got != exp {
 			t.Fatalf("keyHash=%v, expected %v", got, exp)
 		} else if got, exp := len(other.entries), 2; got != exp {
@@ -773,7 +773,7 @@ func TestInternal_mapValueNode(t *testing.T) {
 			var h intHasher
 			var resized bool
 			n := newMapValueNode(h.Hash(2), 2, 3)
-			other := n.set(4, 5, 0, h.Hash(4), &h, false, &resized).(*mapBitmapIndexedNode)
+			other := n.set(4, 5, 0, h.Hash(4), &h, false, &resized).(*mapBitmapIndexedNode[int, int])
 			if got, exp := other.bitmap, uint32(0x14); got != exp {
 				t.Fatalf("bitmap=0x%02x, expected 0x%02x", got, exp)
 			} else if got, exp := len(other.nodes), 2; got != exp {
@@ -781,14 +781,14 @@ func TestInternal_mapValueNode(t *testing.T) {
 			} else if !resized {
 				t.Fatal("expected resize")
 			}
-			if node, ok := other.nodes[0].(*mapValueNode); !ok {
+			if node, ok := other.nodes[0].(*mapValueNode[int, int]); !ok {
 				t.Fatalf("node[0]=%T, unexpected type", other.nodes[0])
 			} else if got, exp := node.key, 2; got != exp {
 				t.Fatalf("key[0]=%v, expected %v", got, exp)
 			} else if got, exp := node.value, 3; got != exp {
 				t.Fatalf("value[0]=%v, expected %v", got, exp)
 			}
-			if node, ok := other.nodes[1].(*mapValueNode); !ok {
+			if node, ok := other.nodes[1].(*mapValueNode[int, int]); !ok {
 				t.Fatalf("node[1]=%T, unexpected type", other.nodes[1])
 			} else if got, exp := node.key, 4; got != exp {
 				t.Fatalf("key[1]=%v, expected %v", got, exp)
@@ -797,9 +797,9 @@ func TestInternal_mapValueNode(t *testing.T) {
 			}
 
 			// Ensure both values can be read.
-			if v, ok := other.get(2, 0, h.Hash(2), &h); !ok || v.(int) != 3 {
+			if v, ok := other.get(2, 0, h.Hash(2), &h); !ok || v != 3 {
 				t.Fatalf("Get(2)=<%v,%v>", v, ok)
-			} else if v, ok := other.get(4, 0, h.Hash(4), &h); !ok || v.(int) != 5 {
+			} else if v, ok := other.get(4, 0, h.Hash(4), &h); !ok || v != 5 {
 				t.Fatalf("Get(4)=<%v,%v>", v, ok)
 			}
 		})
@@ -809,7 +809,7 @@ func TestInternal_mapValueNode(t *testing.T) {
 			var h intHasher
 			var resized bool
 			n := newMapValueNode(h.Hash(4), 4, 5)
-			other := n.set(2, 3, 0, h.Hash(2), &h, false, &resized).(*mapBitmapIndexedNode)
+			other := n.set(2, 3, 0, h.Hash(2), &h, false, &resized).(*mapBitmapIndexedNode[int, int])
 			if got, exp := other.bitmap, uint32(0x14); got != exp {
 				t.Fatalf("bitmap=0x%02x, expected 0x%02x", got, exp)
 			} else if got, exp := len(other.nodes), 2; got != exp {
@@ -817,14 +817,14 @@ func TestInternal_mapValueNode(t *testing.T) {
 			} else if !resized {
 				t.Fatal("expected resize")
 			}
-			if node, ok := other.nodes[0].(*mapValueNode); !ok {
+			if node, ok := other.nodes[0].(*mapValueNode[int, int]); !ok {
 				t.Fatalf("node[0]=%T, unexpected type", other.nodes[0])
 			} else if got, exp := node.key, 2; got != exp {
 				t.Fatalf("key[0]=%v, expected %v", got, exp)
 			} else if got, exp := node.value, 3; got != exp {
 				t.Fatalf("value[0]=%v, expected %v", got, exp)
 			}
-			if node, ok := other.nodes[1].(*mapValueNode); !ok {
+			if node, ok := other.nodes[1].(*mapValueNode[int, int]); !ok {
 				t.Fatalf("node[1]=%T, unexpected type", other.nodes[1])
 			} else if got, exp := node.key, 4; got != exp {
 				t.Fatalf("key[1]=%v, expected %v", got, exp)
@@ -833,22 +833,22 @@ func TestInternal_mapValueNode(t *testing.T) {
 			}
 
 			// Ensure both values can be read.
-			if v, ok := other.get(2, 0, h.Hash(2), &h); !ok || v.(int) != 3 {
+			if v, ok := other.get(2, 0, h.Hash(2), &h); !ok || v != 3 {
 				t.Fatalf("Get(2)=<%v,%v>", v, ok)
-			} else if v, ok := other.get(4, 0, h.Hash(4), &h); !ok || v.(int) != 5 {
+			} else if v, ok := other.get(4, 0, h.Hash(4), &h); !ok || v != 5 {
 				t.Fatalf("Get(4)=<%v,%v>", v, ok)
 			}
 		})
 
 		// Inserting a node with the same mask index should nest an additional level of bitmap nodes.
 		t.Run("Conflict", func(t *testing.T) {
-			h := &mockHasher{
-				hash:  func(value interface{}) uint32 { return uint32(value.(int)) << 5 },
-				equal: func(a, b interface{}) bool { return a.(int) == b.(int) },
+			h := &mockHasher[int]{
+				hash:  func(value int) uint32 { return uint32(value) << 5 },
+				equal: func(a, b int) bool { return a == b },
 			}
 			var resized bool
 			n := newMapValueNode(h.Hash(2), 2, 3)
-			other := n.set(4, 5, 0, h.Hash(4), h, false, &resized).(*mapBitmapIndexedNode)
+			other := n.set(4, 5, 0, h.Hash(4), h, false, &resized).(*mapBitmapIndexedNode[int, int])
 			if got, exp := other.bitmap, uint32(0x01); got != exp { // mask is zero, expect first slot.
 				t.Fatalf("bitmap=0x%02x, expected 0x%02x", got, exp)
 			} else if got, exp := len(other.nodes), 1; got != exp {
@@ -856,19 +856,19 @@ func TestInternal_mapValueNode(t *testing.T) {
 			} else if !resized {
 				t.Fatal("expected resize")
 			}
-			child, ok := other.nodes[0].(*mapBitmapIndexedNode)
+			child, ok := other.nodes[0].(*mapBitmapIndexedNode[int, int])
 			if !ok {
 				t.Fatalf("node[0]=%T, unexpected type", other.nodes[0])
 			}
 
-			if node, ok := child.nodes[0].(*mapValueNode); !ok {
+			if node, ok := child.nodes[0].(*mapValueNode[int, int]); !ok {
 				t.Fatalf("node[0]=%T, unexpected type", child.nodes[0])
 			} else if got, exp := node.key, 2; got != exp {
 				t.Fatalf("key[0]=%v, expected %v", got, exp)
 			} else if got, exp := node.value, 3; got != exp {
 				t.Fatalf("value[0]=%v, expected %v", got, exp)
 			}
-			if node, ok := child.nodes[1].(*mapValueNode); !ok {
+			if node, ok := child.nodes[1].(*mapValueNode[int, int]); !ok {
 				t.Fatalf("node[1]=%T, unexpected type", child.nodes[1])
 			} else if got, exp := node.key, 4; got != exp {
 				t.Fatalf("key[1]=%v, expected %v", got, exp)
@@ -877,9 +877,9 @@ func TestInternal_mapValueNode(t *testing.T) {
 			}
 
 			// Ensure both values can be read.
-			if v, ok := other.get(2, 0, h.Hash(2), h); !ok || v.(int) != 3 {
+			if v, ok := other.get(2, 0, h.Hash(2), h); !ok || v != 3 {
 				t.Fatalf("Get(2)=<%v,%v>", v, ok)
-			} else if v, ok := other.get(4, 0, h.Hash(4), h); !ok || v.(int) != 5 {
+			} else if v, ok := other.get(4, 0, h.Hash(4), h); !ok || v != 5 {
 				t.Fatalf("Get(4)=<%v,%v>", v, ok)
 			} else if v, ok := other.get(10, 0, h.Hash(10), h); ok {
 				t.Fatalf("Get(10)=<%v,%v>, expected no value", v, ok)
@@ -890,8 +890,8 @@ func TestInternal_mapValueNode(t *testing.T) {
 
 func TestMap_Get(t *testing.T) {
 	t.Run("Empty", func(t *testing.T) {
-		m := NewMap(nil)
-		if v, ok := m.Get(100); ok || v != nil {
+		m := NewMap[int, int](&intHasher{})
+		if v, ok := m.Get(100); ok {
 			t.Fatalf("unexpected value: <%v,%v>", v, ok)
 		}
 	})
@@ -899,17 +899,17 @@ func TestMap_Get(t *testing.T) {
 
 func TestMap_Set(t *testing.T) {
 	t.Run("Simple", func(t *testing.T) {
-		m := NewMap(nil)
+		m := NewMap[int, int](&intHasher{})
 		itr := m.Iterator()
 		if !itr.Done() {
 			t.Fatal("MapIterator.Done()=true, expected false")
-		} else if k, v := itr.Next(); k != nil || v != nil {
-			t.Fatalf("MapIterator.Next()=<%v,%v>, expected nil", k, v)
+		} else if k, v, ok := itr.Next(); k != 0 || v != 0 || ok {
+			t.Fatalf("MapIterator.Next()=<%v,%v,%v>, expected false", k, v, ok)
 		}
 	})
 
 	t.Run("Simple", func(t *testing.T) {
-		m := NewMap(nil)
+		m := NewMap[int, string](&intHasher{})
 		m = m.Set(100, "foo")
 		if v, ok := m.Get(100); !ok || v != "foo" {
 			t.Fatalf("unexpected value: <%v,%v>", v, ok)
@@ -918,7 +918,7 @@ func TestMap_Set(t *testing.T) {
 
 	t.Run("VerySmall", func(t *testing.T) {
 		const n = 6
-		m := NewMap(nil)
+		m := NewMap[int, int](&intHasher{})
 		for i := 0; i < n; i++ {
 			m = m.Set(i, i+1)
 		}
@@ -931,8 +931,8 @@ func TestMap_Set(t *testing.T) {
 		// NOTE: Array nodes store entries in insertion order.
 		itr := m.Iterator()
 		for i := 0; i < n; i++ {
-			if k, v := itr.Next(); k != i || v != i+1 {
-				t.Fatalf("MapIterator.Next()=<%v,%v>, exp <%v,%v>", k, v, i, i+1)
+			if k, v, hasNext := itr.Next(); k != i || v != i+1 || !hasNext {
+				t.Fatalf("MapIterator.Next()=<%v,%v,%v>, exp <%v,%v,%v>", k, v, hasNext, i, i+1, false)
 			}
 		}
 		if !itr.Done() {
@@ -942,7 +942,7 @@ func TestMap_Set(t *testing.T) {
 
 	t.Run("Small", func(t *testing.T) {
 		const n = 1000
-		m := NewMap(nil)
+		m := NewMap[int, int](&intHasher{})
 		for i := 0; i < n; i++ {
 			m = m.Set(i, i+1)
 		}
@@ -959,7 +959,7 @@ func TestMap_Set(t *testing.T) {
 		}
 
 		const n = 1000000
-		m := NewMap(nil)
+		m := NewMap[int, int](&intHasher{})
 		for i := 0; i < n; i++ {
 			m = m.Set(i, i+1)
 		}
@@ -971,7 +971,7 @@ func TestMap_Set(t *testing.T) {
 	})
 
 	t.Run("StringKeys", func(t *testing.T) {
-		m := NewMap(nil)
+		m := NewMap[string, string](&stringHasher{})
 		m = m.Set("foo", "bar")
 		m = m.Set("baz", "bat")
 		m = m.Set("", "EMPTY")
@@ -988,7 +988,7 @@ func TestMap_Set(t *testing.T) {
 	})
 
 	t.Run("ByteSliceKeys", func(t *testing.T) {
-		m := NewMap(nil)
+		m := NewMap[[]byte, string](&byteSliceHasher{})
 		m = m.Set([]byte("foo"), "bar")
 		m = m.Set([]byte("baz"), "bat")
 		m = m.Set([]byte(""), "EMPTY")
@@ -1001,19 +1001,6 @@ func TestMap_Set(t *testing.T) {
 		}
 		if v, ok := m.Get([]byte("no_such_key")); ok {
 			t.Fatalf("expected no value: <%v,%v>", v, ok)
-		}
-	})
-
-	t.Run("NoDefaultHasher", func(t *testing.T) {
-		type T struct{}
-		var r string
-		func() {
-			defer func() { r = recover().(string) }()
-			m := NewMap(nil)
-			m = m.Set(T{}, "bar")
-		}()
-		if r != `immutable.NewHasher: must set hasher for immutable.T type` {
-			t.Fatalf("unexpected panic: %q", r)
 		}
 	})
 
@@ -1040,7 +1027,7 @@ func TestMap_Overwrite(t *testing.T) {
 	}
 
 	const n = 10000
-	m := NewMap(nil)
+	m := NewMap[int, int](&intHasher{})
 	for i := 0; i < n; i++ {
 		// Set original value.
 		m = m.Set(i, i)
@@ -1061,7 +1048,7 @@ func TestMap_Overwrite(t *testing.T) {
 
 func TestMap_Delete(t *testing.T) {
 	t.Run("Empty", func(t *testing.T) {
-		m := NewMap(nil)
+		m := NewMap[string, string](&stringHasher{})
 		other := m.Delete("foo")
 		if m != other {
 			t.Fatal("expected same map")
@@ -1069,7 +1056,7 @@ func TestMap_Delete(t *testing.T) {
 	})
 
 	t.Run("Simple", func(t *testing.T) {
-		m := NewMap(nil)
+		m := NewMap[int, string](&intHasher{})
 		m = m.Set(100, "foo")
 		if v, ok := m.Get(100); !ok || v != "foo" {
 			t.Fatalf("unexpected value: <%v,%v>", v, ok)
@@ -1078,7 +1065,7 @@ func TestMap_Delete(t *testing.T) {
 
 	t.Run("Small", func(t *testing.T) {
 		const n = 1000
-		m := NewMap(nil)
+		m := NewMap[int, int](&intHasher{})
 		for i := 0; i < n; i++ {
 			m = m.Set(i, i+1)
 		}
@@ -1095,7 +1082,7 @@ func TestMap_Delete(t *testing.T) {
 			t.Skip("skipping: short")
 		}
 		const n = 1000000
-		m := NewMap(nil)
+		m := NewMap[int, int](&intHasher{})
 		for i := 0; i < n; i++ {
 			m = m.Set(i, i+1)
 		}
@@ -1142,11 +1129,11 @@ func TestMap_LimitedHash(t *testing.T) {
 	}
 
 	t.Run("Immutable", func(t *testing.T) {
-		h := mockHasher{
-			hash:  func(value interface{}) uint32 { return hashUint64(uint64(value.(int))) % 0xFF },
-			equal: func(a, b interface{}) bool { return a.(int) == b.(int) },
+		h := mockHasher[int]{
+			hash:  func(value int) uint32 { return hashUint64(uint64(value)) % 0xFF },
+			equal: func(a, b int) bool { return a == b },
 		}
-		m := NewMap(&h)
+		m := NewMap[int, int](&h)
 
 		rand := rand.New(rand.NewSource(0))
 		keys := rand.Perm(100000)
@@ -1170,8 +1157,8 @@ func TestMap_LimitedHash(t *testing.T) {
 		// Verify iteration.
 		itr := m.Iterator()
 		for !itr.Done() {
-			if k, v := itr.Next(); v != k.(int)*2 {
-				t.Fatalf("MapIterator.Next()=<%v,%v>, expected value %v", k, v, k.(int)*2)
+			if k, v, _ := itr.Next(); v != k*2 {
+				t.Fatalf("MapIterator.Next()=<%v,%v>, expected value %v", k, v, k*2)
 			}
 		}
 
@@ -1195,11 +1182,11 @@ func TestMap_LimitedHash(t *testing.T) {
 	})
 
 	t.Run("Builder", func(t *testing.T) {
-		h := mockHasher{
-			hash:  func(value interface{}) uint32 { return hashUint64(uint64(value.(int))) % 0xFF },
-			equal: func(a, b interface{}) bool { return a.(int) == b.(int) },
+		h := mockHasher[int]{
+			hash:  func(value int) uint32 { return hashUint64(uint64(value)) % 0xFF },
+			equal: func(a, b int) bool { return a == b },
 		}
-		b := NewMapBuilder(&h)
+		b := NewMapBuilder[int, int](&h)
 
 		rand := rand.New(rand.NewSource(0))
 		keys := rand.Perm(100000)
@@ -1223,8 +1210,8 @@ func TestMap_LimitedHash(t *testing.T) {
 		// Verify iteration.
 		itr := b.Iterator()
 		for !itr.Done() {
-			if k, v := itr.Next(); v != k.(int)*2 {
-				t.Fatalf("MapIterator.Next()=<%v,%v>, expected value %v", k, v, k.(int)*2)
+			if k, v, _ := itr.Next(); v != k*2 {
+				t.Fatalf("MapIterator.Next()=<%v,%v>, expected value %v", k, v, k*2)
 			}
 		}
 
@@ -1245,16 +1232,16 @@ func TestMap_LimitedHash(t *testing.T) {
 
 // TMap represents a combined immutable and stdlib map.
 type TMap struct {
-	im, prev *Map
-	builder  *MapBuilder
+	im, prev *Map[int, int]
+	builder  *MapBuilder[int, int]
 	std      map[int]int
 	keys     []int
 }
 
 func NewTestMap() *TMap {
 	return &TMap{
-		im:      NewMap(nil),
-		builder: NewMapBuilder(nil),
+		im:      NewMap[int, int](&intHasher{}),
+		builder: NewMapBuilder[int, int](&intHasher{}),
 		std:     make(map[int]int),
 	}
 }
@@ -1322,11 +1309,11 @@ func (m *TMap) Validate() error {
 	return nil
 }
 
-func (m *TMap) validateIterator(itr *MapIterator) error {
+func (m *TMap) validateIterator(itr *MapIterator[int, int]) error {
 	other := make(map[int]int)
 	for !itr.Done() {
-		k, v := itr.Next()
-		other[k.(int)] = v.(int)
+		k, v, _ := itr.Next()
+		other[k] = v
 	}
 	if len(other) != len(m.std) {
 		return fmt.Errorf("map iterator size mismatch: %v!=%v", len(m.std), len(other))
@@ -1336,8 +1323,8 @@ func (m *TMap) validateIterator(itr *MapIterator) error {
 			return fmt.Errorf("map iterator mismatch: key=%v, %v!=%v", k, v, other[k])
 		}
 	}
-	if k, v := itr.Next(); k != nil || v != nil {
-		return fmt.Errorf("map iterator returned key/value after done: <%v/%v>", k, v)
+	if k, v, hasNext := itr.Next(); k != 0 || v != 0 || hasNext {
+		return fmt.Errorf("map iterator returned key/value/hasNext after done: <%v/%v/%v>", k, v, hasNext)
 	}
 	return nil
 }
@@ -1367,7 +1354,7 @@ func BenchmarkBuiltinMap_Delete(b *testing.B) {
 
 func BenchmarkMap_Set(b *testing.B) {
 	b.ReportAllocs()
-	m := NewMap(nil)
+	m := NewMap[int, int](&intHasher{})
 	for i := 0; i < b.N; i++ {
 		m = m.Set(i, i)
 	}
@@ -1376,7 +1363,7 @@ func BenchmarkMap_Set(b *testing.B) {
 func BenchmarkMap_Delete(b *testing.B) {
 	const n = 10000000
 
-	builder := NewMapBuilder(nil)
+	builder := NewMapBuilder[int, int](&intHasher{})
 	for i := 0; i < n; i++ {
 		builder.Set(i, i)
 	}
@@ -1391,7 +1378,7 @@ func BenchmarkMap_Delete(b *testing.B) {
 
 func BenchmarkMap_Iterator(b *testing.B) {
 	const n = 10000
-	m := NewMap(nil)
+	m := NewMap[int, int](&intHasher{})
 	for i := 0; i < 10000; i++ {
 		m = m.Set(i, i)
 	}
@@ -1411,7 +1398,7 @@ func BenchmarkMap_Iterator(b *testing.B) {
 
 func BenchmarkMapBuilder_Set(b *testing.B) {
 	b.ReportAllocs()
-	builder := NewMapBuilder(nil)
+	builder := NewMapBuilder[int, int](&intHasher{})
 	for i := 0; i < b.N; i++ {
 		builder.Set(i, i)
 	}
@@ -1420,7 +1407,7 @@ func BenchmarkMapBuilder_Set(b *testing.B) {
 func BenchmarkMapBuilder_Delete(b *testing.B) {
 	const n = 10000000
 
-	builder := NewMapBuilder(nil)
+	builder := NewMapBuilder[int, int](&intHasher{})
 	for i := 0; i < n; i++ {
 		builder.Set(i, i)
 	}
@@ -1433,7 +1420,7 @@ func BenchmarkMapBuilder_Delete(b *testing.B) {
 }
 
 func ExampleMap_Set() {
-	m := NewMap(nil)
+	m := NewMap[string, interface{}](&stringHasher{})
 	m = m.Set("foo", "bar")
 	m = m.Set("baz", 100)
 
@@ -1452,7 +1439,7 @@ func ExampleMap_Set() {
 }
 
 func ExampleMap_Delete() {
-	m := NewMap(nil)
+	m := NewMap[string, interface{}](&stringHasher{})
 	m = m.Set("foo", "bar")
 	m = m.Set("baz", 100)
 	m = m.Delete("baz")
@@ -1468,7 +1455,7 @@ func ExampleMap_Delete() {
 }
 
 func ExampleMap_Iterator() {
-	m := NewMap(nil)
+	m := NewMap[string, int](&stringHasher{})
 	m = m.Set("apple", 100)
 	m = m.Set("grape", 200)
 	m = m.Set("kiwi", 300)
@@ -1481,7 +1468,7 @@ func ExampleMap_Iterator() {
 
 	itr := m.Iterator()
 	for !itr.Done() {
-		k, v := itr.Next()
+		k, v, _ := itr.Next()
 		fmt.Println(k, v)
 	}
 	// Output:
@@ -1497,7 +1484,7 @@ func ExampleMap_Iterator() {
 }
 
 func ExampleMapBuilder_Set() {
-	b := NewMapBuilder(nil)
+	b := NewMapBuilder[string, interface{}](&stringHasher{})
 	b.Set("foo", "bar")
 	b.Set("baz", 100)
 
@@ -1517,7 +1504,7 @@ func ExampleMapBuilder_Set() {
 }
 
 func ExampleMapBuilder_Delete() {
-	b := NewMapBuilder(nil)
+	b := NewMapBuilder[string, interface{}](&stringHasher{})
 	b.Set("foo", "bar")
 	b.Set("baz", 100)
 	b.Delete("baz")
@@ -1536,11 +1523,11 @@ func ExampleMapBuilder_Delete() {
 func TestInternalSortedMapLeafNode(t *testing.T) {
 	RunRandom(t, "NoSplit", func(t *testing.T, rand *rand.Rand) {
 		var cmpr intComparer
-		var node sortedMapNode = &sortedMapLeafNode{}
+		var node sortedMapNode[int, int] = &sortedMapLeafNode[int, int]{}
 		var keys []int
 		for _, i := range rand.Perm(32) {
 			var resized bool
-			var splitNode sortedMapNode
+			var splitNode sortedMapNode[int, int]
 			node, splitNode = node.set(i, i*10, &cmpr, false, &resized)
 			if !resized {
 				t.Fatal("expected resize")
@@ -1571,7 +1558,7 @@ func TestInternalSortedMapLeafNode(t *testing.T) {
 
 	RunRandom(t, "Overwrite", func(t *testing.T, rand *rand.Rand) {
 		var cmpr intComparer
-		var node sortedMapNode = &sortedMapLeafNode{}
+		var node sortedMapNode[int, int] = &sortedMapLeafNode[int, int]{}
 		for _, i := range rand.Perm(32) {
 			var resized bool
 			node, _ = node.set(i, i*2, &cmpr, false, &resized)
@@ -1595,7 +1582,7 @@ func TestInternalSortedMapLeafNode(t *testing.T) {
 	t.Run("Split", func(t *testing.T) {
 		// Fill leaf node.
 		var cmpr intComparer
-		var node sortedMapNode = &sortedMapLeafNode{}
+		var node sortedMapNode[int, int] = &sortedMapLeafNode[int, int]{}
 		for i := 0; i < 32; i++ {
 			var resized bool
 			node, _ = node.set(i, i*10, &cmpr, false, &resized)
@@ -1606,7 +1593,7 @@ func TestInternalSortedMapLeafNode(t *testing.T) {
 		newNode, splitNode := node.set(32, 320, &cmpr, false, &resized)
 
 		// Verify node contents.
-		newLeafNode, ok := newNode.(*sortedMapLeafNode)
+		newLeafNode, ok := newNode.(*sortedMapLeafNode[int, int])
 		if !ok {
 			t.Fatalf("unexpected node type: %T", newLeafNode)
 		} else if n := len(newLeafNode.entries); n != 16 {
@@ -1619,7 +1606,7 @@ func TestInternalSortedMapLeafNode(t *testing.T) {
 		}
 
 		// Verify split node contents.
-		splitLeafNode, ok := splitNode.(*sortedMapLeafNode)
+		splitLeafNode, ok := splitNode.(*sortedMapLeafNode[int, int])
 		if !ok {
 			t.Fatalf("unexpected split node type: %T", splitLeafNode)
 		} else if n := len(splitLeafNode.entries); n != 17 {
@@ -1644,16 +1631,16 @@ func TestInternalSortedMapBranchNode(t *testing.T) {
 
 		// Initialize branch with two leafs.
 		var cmpr intComparer
-		leaf0 := &sortedMapLeafNode{entries: []mapEntry{{key: keys[0], value: keys[0] * 10}}}
-		leaf1 := &sortedMapLeafNode{entries: []mapEntry{{key: keys[1], value: keys[1] * 10}}}
-		var node sortedMapNode = newSortedMapBranchNode(leaf0, leaf1)
+		leaf0 := &sortedMapLeafNode[int, int]{entries: []mapEntry[int, int]{{key: keys[0], value: keys[0] * 10}}}
+		leaf1 := &sortedMapLeafNode[int, int]{entries: []mapEntry[int, int]{{key: keys[1], value: keys[1] * 10}}}
+		var node sortedMapNode[int, int] = newSortedMapBranchNode[int, int](leaf0, leaf1)
 
 		sort.Ints(keys)
 		for _, i := range rand.Perm(len(keys)) {
 			key := keys[i]
 
 			var resized bool
-			var splitNode sortedMapNode
+			var splitNode sortedMapNode[int, int]
 			node, splitNode = node.set(key, key*10, &cmpr, false, &resized)
 			if key == leaf0.entries[0].key || key == leaf1.entries[0].key {
 				if resized {
@@ -1685,15 +1672,15 @@ func TestInternalSortedMapBranchNode(t *testing.T) {
 	t.Run("Split", func(t *testing.T) {
 		// Generate leaf nodes.
 		var cmpr intComparer
-		children := make([]sortedMapNode, 32)
+		children := make([]sortedMapNode[int, int], 32)
 		for i := range children {
-			leaf := &sortedMapLeafNode{entries: make([]mapEntry, 32)}
+			leaf := &sortedMapLeafNode[int, int]{entries: make([]mapEntry[int, int], 32)}
 			for j := range leaf.entries {
-				leaf.entries[j] = mapEntry{key: (i * 32) + j, value: ((i * 32) + j) * 100}
+				leaf.entries[j] = mapEntry[int, int]{key: (i * 32) + j, value: ((i * 32) + j) * 100}
 			}
 			children[i] = leaf
 		}
-		var node sortedMapNode = newSortedMapBranchNode(children...)
+		var node sortedMapNode[int, int] = newSortedMapBranchNode(children...)
 
 		// Add one more and expect split.
 		var resized bool
@@ -1701,14 +1688,14 @@ func TestInternalSortedMapBranchNode(t *testing.T) {
 
 		// Verify node contents.
 		var idx int
-		newBranchNode, ok := newNode.(*sortedMapBranchNode)
+		newBranchNode, ok := newNode.(*sortedMapBranchNode[int, int])
 		if !ok {
 			t.Fatalf("unexpected node type: %T", newBranchNode)
 		} else if n := len(newBranchNode.elems); n != 16 {
 			t.Fatalf("unexpected child elems len: %d", n)
 		}
 		for i, elem := range newBranchNode.elems {
-			child, ok := elem.node.(*sortedMapLeafNode)
+			child, ok := elem.node.(*sortedMapLeafNode[int, int])
 			if !ok {
 				t.Fatalf("unexpected child type")
 			}
@@ -1721,14 +1708,14 @@ func TestInternalSortedMapBranchNode(t *testing.T) {
 		}
 
 		// Verify split node contents.
-		splitBranchNode, ok := splitNode.(*sortedMapBranchNode)
+		splitBranchNode, ok := splitNode.(*sortedMapBranchNode[int, int])
 		if !ok {
 			t.Fatalf("unexpected split node type: %T", splitBranchNode)
 		} else if n := len(splitBranchNode.elems); n != 17 {
 			t.Fatalf("unexpected split node elem len: %d", n)
 		}
 		for i, elem := range splitBranchNode.elems {
-			child, ok := elem.node.(*sortedMapLeafNode)
+			child, ok := elem.node.(*sortedMapLeafNode[int, int])
 			if !ok {
 				t.Fatalf("unexpected split node child type")
 			}
@@ -1744,8 +1731,8 @@ func TestInternalSortedMapBranchNode(t *testing.T) {
 
 func TestSortedMap_Get(t *testing.T) {
 	t.Run("Empty", func(t *testing.T) {
-		m := NewSortedMap(nil)
-		if v, ok := m.Get(100); ok || v != nil {
+		m := NewSortedMap[int, int](&intComparer{})
+		if v, ok := m.Get(100); ok {
 			t.Fatalf("unexpected value: <%v,%v>", v, ok)
 		}
 	})
@@ -1753,7 +1740,7 @@ func TestSortedMap_Get(t *testing.T) {
 
 func TestSortedMap_Set(t *testing.T) {
 	t.Run("Simple", func(t *testing.T) {
-		m := NewSortedMap(nil)
+		m := NewSortedMap[int, string](&intComparer{})
 		m = m.Set(100, "foo")
 		if v, ok := m.Get(100); !ok || v != "foo" {
 			t.Fatalf("unexpected value: <%v,%v>", v, ok)
@@ -1764,7 +1751,7 @@ func TestSortedMap_Set(t *testing.T) {
 
 	t.Run("Small", func(t *testing.T) {
 		const n = 1000
-		m := NewSortedMap(nil)
+		m := NewSortedMap[int, int](&intComparer{})
 		for i := 0; i < n; i++ {
 			m = m.Set(i, i+1)
 		}
@@ -1781,7 +1768,7 @@ func TestSortedMap_Set(t *testing.T) {
 		}
 
 		const n = 1000000
-		m := NewSortedMap(nil)
+		m := NewSortedMap[int, int](&intComparer{})
 		for i := 0; i < n; i++ {
 			m = m.Set(i, i+1)
 		}
@@ -1793,7 +1780,7 @@ func TestSortedMap_Set(t *testing.T) {
 	})
 
 	t.Run("StringKeys", func(t *testing.T) {
-		m := NewSortedMap(nil)
+		m := NewSortedMap[string, string](&stringComparer{})
 		m = m.Set("foo", "bar")
 		m = m.Set("baz", "bat")
 		m = m.Set("", "EMPTY")
@@ -1810,7 +1797,7 @@ func TestSortedMap_Set(t *testing.T) {
 	})
 
 	t.Run("ByteSliceKeys", func(t *testing.T) {
-		m := NewSortedMap(nil)
+		m := NewSortedMap[[]byte, string](&byteSliceComparer{})
 		m = m.Set([]byte("foo"), "bar")
 		m = m.Set([]byte("baz"), "bat")
 		m = m.Set([]byte(""), "EMPTY")
@@ -1823,18 +1810,6 @@ func TestSortedMap_Set(t *testing.T) {
 		}
 		if v, ok := m.Get([]byte("no_such_key")); ok {
 			t.Fatalf("expected no value: <%v,%v>", v, ok)
-		}
-	})
-
-	t.Run("NoDefaultComparer", func(t *testing.T) {
-		var r string
-		func() {
-			defer func() { r = recover().(string) }()
-			m := NewSortedMap(nil)
-			m = m.Set(float64(100), "bar")
-		}()
-		if r != `immutable.NewComparer: must set comparer for float64 type` {
-			t.Fatalf("unexpected panic: %q", r)
 		}
 	})
 
@@ -1857,7 +1832,7 @@ func TestSortedMap_Set(t *testing.T) {
 // Ensure map can support overwrites as it expands.
 func TestSortedMap_Overwrite(t *testing.T) {
 	const n = 1000
-	m := NewSortedMap(nil)
+	m := NewSortedMap[int, int](&intComparer{})
 	for i := 0; i < n; i++ {
 		// Set original value.
 		m = m.Set(i, i)
@@ -1878,7 +1853,7 @@ func TestSortedMap_Overwrite(t *testing.T) {
 
 func TestSortedMap_Delete(t *testing.T) {
 	t.Run("Empty", func(t *testing.T) {
-		m := NewSortedMap(nil)
+		m := NewSortedMap[int, int](&intComparer{})
 		m = m.Delete(100)
 		if n := m.Len(); n != 0 {
 			t.Fatalf("SortedMap.Len()=%d, expected 0", n)
@@ -1886,7 +1861,7 @@ func TestSortedMap_Delete(t *testing.T) {
 	})
 
 	t.Run("Simple", func(t *testing.T) {
-		m := NewSortedMap(nil)
+		m := NewSortedMap[int, string](&intComparer{})
 		m = m.Set(100, "foo")
 		if v, ok := m.Get(100); !ok || v != "foo" {
 			t.Fatalf("unexpected value: <%v,%v>", v, ok)
@@ -1899,7 +1874,7 @@ func TestSortedMap_Delete(t *testing.T) {
 
 	t.Run("Small", func(t *testing.T) {
 		const n = 1000
-		m := NewSortedMap(nil)
+		m := NewSortedMap[int, int](&intComparer{})
 		for i := 0; i < n; i++ {
 			m = m.Set(i, i+1)
 		}
@@ -1925,7 +1900,7 @@ func TestSortedMap_Delete(t *testing.T) {
 		}
 
 		const n = 1000000
-		m := NewSortedMap(nil)
+		m := NewSortedMap[int, int](&intComparer{})
 		for i := 0; i < n; i++ {
 			m = m.Set(i, i+1)
 		}
@@ -1978,33 +1953,33 @@ func TestSortedMap_Delete(t *testing.T) {
 func TestSortedMap_Iterator(t *testing.T) {
 	t.Run("Empty", func(t *testing.T) {
 		t.Run("First", func(t *testing.T) {
-			itr := NewSortedMap(nil).Iterator()
+			itr := NewSortedMap[int, int](&intComparer{}).Iterator()
 			itr.First()
-			if k, v := itr.Next(); k != nil || v != nil {
-				t.Fatalf("SortedMapIterator.Next()=<%v,%v>, expected nil", k, v)
+			if k, v, ok := itr.Next(); k != 0 || v != 0 || ok {
+				t.Fatalf("SortedMapIterator.Next()=<%v,%v,%v>, expected <0,0,false>", k, v, ok)
 			}
 		})
 
 		t.Run("Last", func(t *testing.T) {
-			itr := NewSortedMap(nil).Iterator()
+			itr := NewSortedMap[int, int](&intComparer{}).Iterator()
 			itr.Last()
-			if k, v := itr.Prev(); k != nil || v != nil {
-				t.Fatalf("SortedMapIterator.Prev()=<%v,%v>, expected nil", k, v)
+			if k, v, ok := itr.Prev(); k != 0 || v != 0 || ok {
+				t.Fatalf("SortedMapIterator.Prev()=<%v,%v, %v>, expected <0,0,false>", k, v, ok)
 			}
 		})
 
 		t.Run("Seek", func(t *testing.T) {
-			itr := NewSortedMap(nil).Iterator()
+			itr := NewSortedMap[string, int](&stringComparer{}).Iterator()
 			itr.Seek("foo")
-			if k, v := itr.Next(); k != nil || v != nil {
-				t.Fatalf("SortedMapIterator.Next()=<%v,%v>, expected nil", k, v)
+			if k, v, ok := itr.Next(); k != "" || v != 0 || ok {
+				t.Fatalf("SortedMapIterator.Next()=<%v,%v,%v>, expected false", k, v, ok)
 			}
 		})
 	})
 
 	t.Run("Seek", func(t *testing.T) {
 		const n = 100
-		m := NewSortedMap(nil)
+		m := NewSortedMap[string, int](&stringComparer{})
 		for i := 0; i < n; i += 2 {
 			m = m.Set(fmt.Sprintf("%04d", i), i)
 		}
@@ -2014,7 +1989,7 @@ func TestSortedMap_Iterator(t *testing.T) {
 			for i := 0; i < n; i += 2 {
 				itr.Seek(fmt.Sprintf("%04d", i))
 				for j := i; j < n; j += 2 {
-					if k, _ := itr.Next(); k != fmt.Sprintf("%04d", j) {
+					if k, _, _ := itr.Next(); k != fmt.Sprintf("%04d", j) {
 						t.Fatalf("%d/%d. SortedMapIterator.Next()=%v, expected key %04d", i, j, k, j)
 					}
 				}
@@ -2029,7 +2004,7 @@ func TestSortedMap_Iterator(t *testing.T) {
 			for i := 1; i < n-2; i += 2 {
 				itr.Seek(fmt.Sprintf("%04d", i))
 				for j := i + 1; j < n; j += 2 {
-					if k, _ := itr.Next(); k != fmt.Sprintf("%04d", j) {
+					if k, _, _ := itr.Next(); k != fmt.Sprintf("%04d", j) {
 						t.Fatalf("%d/%d. SortedMapIterator.Next()=%v, expected key %04d", i, j, k, j)
 					}
 				}
@@ -2043,7 +2018,7 @@ func TestSortedMap_Iterator(t *testing.T) {
 			itr := m.Iterator()
 			itr.Seek("")
 			for i := 0; i < n; i += 2 {
-				if k, _ := itr.Next(); k != fmt.Sprintf("%04d", i) {
+				if k, _, _ := itr.Next(); k != fmt.Sprintf("%04d", i) {
 					t.Fatalf("%d. SortedMapIterator.Next()=%v, expected key %04d", i, k, i)
 				}
 			}
@@ -2054,8 +2029,8 @@ func TestSortedMap_Iterator(t *testing.T) {
 		t.Run("AfterLast", func(t *testing.T) {
 			itr := m.Iterator()
 			itr.Seek("1000")
-			if k, _ := itr.Next(); k != nil {
-				t.Fatalf("0. SortedMapIterator.Next()=%v, expected nil key", k)
+			if k, _, ok := itr.Next(); k != "" || ok {
+				t.Fatalf("0. SortedMapIterator.Next()=%v,_,%v, expected 0,_,false", k, ok)
 			} else if !itr.Done() {
 				t.Fatalf("SortedMapIterator.Done()=true, expected false")
 			}
@@ -2065,37 +2040,36 @@ func TestSortedMap_Iterator(t *testing.T) {
 
 func TestNewHasher(t *testing.T) {
 	t.Run("builtin", func(t *testing.T) {
-		t.Run("int", func(t *testing.T) { testNewHasher(t, int(100)) })
-		t.Run("int8", func(t *testing.T) { testNewHasher(t, int8(100)) })
-		t.Run("int16", func(t *testing.T) { testNewHasher(t, int16(100)) })
-		t.Run("int32", func(t *testing.T) { testNewHasher(t, int32(100)) })
-		t.Run("int64", func(t *testing.T) { testNewHasher(t, int64(100)) })
+		t.Run("int", func(t *testing.T) { testHasher[int](t, int(100), &intHasher{}) })
+		t.Run("int8", func(t *testing.T) { testHasher[int8](t, int8(100), &int8Hasher{}) })
+		t.Run("int16", func(t *testing.T) { testHasher[int16](t, int16(100), &int16Hasher{}) })
+		t.Run("int32", func(t *testing.T) { testHasher[int32](t, int32(100), &int32Hasher{}) })
+		t.Run("int64", func(t *testing.T) { testHasher[int64](t, int64(100), &int64Hasher{}) })
 
-		t.Run("uint", func(t *testing.T) { testNewHasher(t, uint(100)) })
-		t.Run("uint8", func(t *testing.T) { testNewHasher(t, uint8(100)) })
-		t.Run("uint16", func(t *testing.T) { testNewHasher(t, uint16(100)) })
-		t.Run("uint32", func(t *testing.T) { testNewHasher(t, uint32(100)) })
-		t.Run("uint64", func(t *testing.T) { testNewHasher(t, uint64(100)) })
+		t.Run("uint", func(t *testing.T) { testHasher[uint](t, uint(100), &uintHasher{}) })
+		t.Run("uint8", func(t *testing.T) { testHasher[uint8](t, uint8(100), &uint8Hasher{}) })
+		t.Run("uint16", func(t *testing.T) { testHasher[uint16](t, uint16(100), &uint16Hasher{}) })
+		t.Run("uint32", func(t *testing.T) { testHasher[uint32](t, uint32(100), &uint32Hasher{}) })
+		t.Run("uint64", func(t *testing.T) { testHasher[uint64](t, uint64(100), &uint64Hasher{}) })
 
-		t.Run("string", func(t *testing.T) { testNewHasher(t, "foo") })
-		t.Run("byteSlice", func(t *testing.T) { testNewHasher(t, []byte("foo")) })
+		t.Run("string", func(t *testing.T) { testHasher[string](t, "foo", &stringHasher{}) })
+		t.Run("byteSlice", func(t *testing.T) { testHasher[[]byte](t, []byte("foo"), &byteSliceHasher{}) })
 	})
 
-	t.Run("reflection", func(t *testing.T) {
-		type Int int
-		t.Run("int", func(t *testing.T) { testNewHasher(t, Int(100)) })
-
-		type Uint uint
-		t.Run("uint", func(t *testing.T) { testNewHasher(t, Uint(100)) })
-
-		type String string
-		t.Run("string", func(t *testing.T) { testNewHasher(t, String("foo")) })
-	})
+	//t.Run("reflection", func(t *testing.T) {
+	//	type Int int
+	//	t.Run("int", func(t *testing.T) { testHasher(t, Int(100)) })
+	//
+	//	type Uint uint
+	//	t.Run("uint", func(t *testing.T) { testHasher(t, Uint(100)) })
+	//
+	//	type String string
+	//	t.Run("string", func(t *testing.T) { testHasher(t, String("foo")) })
+	//})
 }
 
-func testNewHasher(t *testing.T, v interface{}) {
+func testHasher[T any](t *testing.T, v T, h Hasher[T]) {
 	t.Helper()
-	h := NewHasher(v)
 	h.Hash(v)
 	if !h.Equal(v, v) {
 		t.Fatal("expected hash equality")
@@ -2146,16 +2120,16 @@ func testNewComparer(t *testing.T, x, y interface{}) {
 
 // TSortedMap represents a combined immutable and stdlib sorted map.
 type TSortedMap struct {
-	im, prev *SortedMap
-	builder  *SortedMapBuilder
+	im, prev *SortedMap[int, int]
+	builder  *SortedMapBuilder[int, int]
 	std      map[int]int
 	keys     []int
 }
 
 func NewTSortedMap() *TSortedMap {
 	return &TSortedMap{
-		im:      NewSortedMap(nil),
-		builder: NewSortedMapBuilder(nil),
+		im:      NewSortedMap[int, int](nil),
+		builder: NewSortedMapBuilder[int, int](nil),
 		std:     make(map[int]int),
 	}
 }
@@ -2235,10 +2209,10 @@ func (m *TSortedMap) Validate() error {
 	return nil
 }
 
-func (m *TSortedMap) validateForwardIterator(itr *SortedMapIterator) error {
+func (m *TSortedMap) validateForwardIterator(itr *SortedMapIterator[int, int]) error {
 	for i, k0 := range m.keys {
 		v0 := m.std[k0]
-		if k1, v1 := itr.Next(); k0 != k1 || v0 != v1 {
+		if k1, v1, ok := itr.Next(); k0 != k1 || v0 != v1 || !ok {
 			return fmt.Errorf("%d. SortedMapIterator.Next()=<%v,%v>, expected <%v,%v>", i, k1, v1, k0, v0)
 		}
 
@@ -2247,19 +2221,19 @@ func (m *TSortedMap) validateForwardIterator(itr *SortedMapIterator) error {
 			return fmt.Errorf("%d. SortedMapIterator.Done()=%v, expected %v", i, v, done)
 		}
 	}
-	if k, v := itr.Next(); k != nil || v != nil {
-		return fmt.Errorf("SortedMapIterator.Next()=<%v,%v>, expected nil after done", k, v)
+	if k, v, ok := itr.Next(); k != 0 || v != 0 || ok {
+		return fmt.Errorf("SortedMapIterator.Next()=<%v,%v,%v>, expected false after done", k, v, ok)
 	}
 	return nil
 }
 
-func (m *TSortedMap) validateBackwardIterator(itr *SortedMapIterator) error {
+func (m *TSortedMap) validateBackwardIterator(itr *SortedMapIterator[int, int]) error {
 	itr.Last()
 	for i := len(m.keys) - 1; i >= 0; i-- {
 		k0 := m.keys[i]
 		v0 := m.std[k0]
-		if k1, v1 := itr.Prev(); k0 != k1 || v0 != v1 {
-			return fmt.Errorf("%d. SortedMapIterator.Prev()=<%v,%v>, expected <%v,%v>", i, k1, v1, k0, v0)
+		if k1, v1, ok := itr.Prev(); k0 != k1 || v0 != v1 || !ok {
+			return fmt.Errorf("%d. SortedMapIterator.Prev()=<%v,%v,%v>, expected <%v,%v,%v>", i, k1, ok, v1, k0, v0, false)
 		}
 
 		done := i == 0
@@ -2267,15 +2241,15 @@ func (m *TSortedMap) validateBackwardIterator(itr *SortedMapIterator) error {
 			return fmt.Errorf("%d. SortedMapIterator.Done()=%v, expected %v", i, v, done)
 		}
 	}
-	if k, v := itr.Prev(); k != nil || v != nil {
-		return fmt.Errorf("SortedMapIterator.Prev()=<%v,%v>, expected nil after done", k, v)
+	if k, v, ok := itr.Prev(); k != 0 || v != 0 || ok {
+		return fmt.Errorf("SortedMapIterator.Prev()=<%v,%v,%v>, expected false after done", k, v, ok)
 	}
 	return nil
 }
 
 func BenchmarkSortedMap_Set(b *testing.B) {
 	b.ReportAllocs()
-	m := NewSortedMap(nil)
+	m := NewSortedMap[int, int](nil)
 	for i := 0; i < b.N; i++ {
 		m = m.Set(i, i)
 	}
@@ -2284,7 +2258,7 @@ func BenchmarkSortedMap_Set(b *testing.B) {
 func BenchmarkSortedMap_Delete(b *testing.B) {
 	const n = 10000
 
-	m := NewSortedMap(nil)
+	m := NewSortedMap[int, int](nil)
 	for i := 0; i < n; i++ {
 		m = m.Set(i, i)
 	}
@@ -2298,7 +2272,7 @@ func BenchmarkSortedMap_Delete(b *testing.B) {
 
 func BenchmarkSortedMap_Iterator(b *testing.B) {
 	const n = 10000
-	m := NewSortedMap(nil)
+	m := NewSortedMap[int, int](nil)
 	for i := 0; i < 10000; i++ {
 		m = m.Set(i, i)
 	}
@@ -2328,7 +2302,7 @@ func BenchmarkSortedMap_Iterator(b *testing.B) {
 
 func BenchmarkSortedMapBuilder_Set(b *testing.B) {
 	b.ReportAllocs()
-	builder := NewSortedMapBuilder(nil)
+	builder := NewSortedMapBuilder[int, int](nil)
 	for i := 0; i < b.N; i++ {
 		builder.Set(i, i)
 	}
@@ -2337,7 +2311,7 @@ func BenchmarkSortedMapBuilder_Set(b *testing.B) {
 func BenchmarkSortedMapBuilder_Delete(b *testing.B) {
 	const n = 1000000
 
-	builder := NewSortedMapBuilder(nil)
+	builder := NewSortedMapBuilder[int, int](nil)
 	for i := 0; i < n; i++ {
 		builder.Set(i, i)
 	}
@@ -2350,7 +2324,7 @@ func BenchmarkSortedMapBuilder_Delete(b *testing.B) {
 }
 
 func ExampleSortedMap_Set() {
-	m := NewSortedMap(nil)
+	m := NewSortedMap[string, interface{}](nil)
 	m = m.Set("foo", "bar")
 	m = m.Set("baz", 100)
 
@@ -2369,7 +2343,7 @@ func ExampleSortedMap_Set() {
 }
 
 func ExampleSortedMap_Delete() {
-	m := NewSortedMap(nil)
+	m := NewSortedMap[string, interface{}](nil)
 	m = m.Set("foo", "bar")
 	m = m.Set("baz", 100)
 	m = m.Delete("baz")
@@ -2385,7 +2359,7 @@ func ExampleSortedMap_Delete() {
 }
 
 func ExampleSortedMap_Iterator() {
-	m := NewSortedMap(nil)
+	m := NewSortedMap[string, int](nil)
 	m = m.Set("strawberry", 900)
 	m = m.Set("kiwi", 300)
 	m = m.Set("apple", 100)
@@ -2398,23 +2372,23 @@ func ExampleSortedMap_Iterator() {
 
 	itr := m.Iterator()
 	for !itr.Done() {
-		k, v := itr.Next()
-		fmt.Println(k, v)
+		k, v, ok := itr.Next()
+		fmt.Println(k, v, ok)
 	}
 	// Output:
-	// apple 100
-	// grape 200
-	// kiwi 300
-	// mango 400
-	// orange 500
-	// peach 600
-	// pear 700
-	// pineapple 800
-	// strawberry 900
+	// apple 100 true
+	// grape 200 true
+	// kiwi 300 true
+	// mango 400 true
+	// orange 500 true
+	// peach 600 true
+	// pear 700 true
+	// pineapple 800 true
+	// strawberry 900 true
 }
 
 func ExampleSortedMapBuilder_Set() {
-	b := NewSortedMapBuilder(nil)
+	b := NewSortedMapBuilder[string, interface{}](nil)
 	b.Set("foo", "bar")
 	b.Set("baz", 100)
 
@@ -2434,7 +2408,7 @@ func ExampleSortedMapBuilder_Set() {
 }
 
 func ExampleSortedMapBuilder_Delete() {
-	b := NewSortedMapBuilder(nil)
+	b := NewSortedMapBuilder[string, interface{}](nil)
 	b.Set("foo", "bar")
 	b.Set("baz", 100)
 	b.Delete("baz")
@@ -2479,18 +2453,18 @@ func uniqueIntSlice(a []int) []int {
 }
 
 // mockHasher represents a mock implementation of immutable.Hasher.
-type mockHasher struct {
-	hash  func(value interface{}) uint32
-	equal func(a, b interface{}) bool
+type mockHasher[K any] struct {
+	hash  func(value K) uint32
+	equal func(a, b K) bool
 }
 
 // Hash executes the mocked HashFn function.
-func (h *mockHasher) Hash(value interface{}) uint32 {
+func (h *mockHasher[K]) Hash(value K) uint32 {
 	return h.hash(value)
 }
 
 // Equal executes the mocked EqualFn function.
-func (h *mockHasher) Equal(a, b interface{}) bool {
+func (h *mockHasher[K]) Equal(a, b K) bool {
 	return h.equal(a, b)
 }
 

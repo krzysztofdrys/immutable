@@ -690,13 +690,13 @@ const (
 type Map[K any, V any] struct {
 	size   int           // total number of key/value pairs
 	root   mapNode[K, V] // root node of trie
-	hasher Hasher[K, V]  // hasher implementation
+	hasher Hasher[K]     // hasher implementation
 }
 
 // NewMap returns a new instance of Map. If hasher is nil, a default hasher
 // implementation will automatically be chosen based on the first key added.
 // Default hasher implementations only exist for int, string, and byte slice types.
-func NewMap[K any, V any](hasher Hasher[K, V]) *Map[K, V] {
+func NewMap[K any, V any](hasher Hasher[K]) *Map[K, V] {
 	return &Map[K, V]{
 		hasher: hasher,
 	}
@@ -807,7 +807,7 @@ type MapBuilder[K any, V any] struct {
 }
 
 // NewMapBuilder returns a new instance of MapBuilder.
-func NewMapBuilder[K any, V any](hasher Hasher[K, V]) *MapBuilder[K, V] {
+func NewMapBuilder[K any, V any](hasher Hasher[K]) *MapBuilder[K, V] {
 	return &MapBuilder[K, V]{m: NewMap[K, V](hasher)}
 }
 
@@ -852,9 +852,9 @@ func (b *MapBuilder[K, V]) Iterator() *MapIterator[K, V] {
 
 // mapNode represents any node in the map tree.
 type mapNode[K any, V any] interface {
-	get(key K, shift uint, keyHash uint32, h Hasher[K, V]) (value V, ok bool)
-	set(key K, value V, shift uint, keyHash uint32, h Hasher[K, V], mutable bool, resized *bool) mapNode[K, V]
-	delete(key K, shift uint, keyHash uint32, h Hasher[K, V], mutable bool, resized *bool) mapNode[K, V]
+	get(key K, shift uint, keyHash uint32, h Hasher[K]) (value V, ok bool)
+	set(key K, value V, shift uint, keyHash uint32, h Hasher[K], mutable bool, resized *bool) mapNode[K, V]
+	delete(key K, shift uint, keyHash uint32, h Hasher[K], mutable bool, resized *bool) mapNode[K, V]
 }
 
 var _ mapNode[int, int] = (*mapArrayNode[int, int])(nil)
@@ -880,7 +880,7 @@ type mapArrayNode[K any, V any] struct {
 }
 
 // indexOf returns the entry index of the given key. Returns -1 if key not found.
-func (n *mapArrayNode[K, V]) indexOf(key K, h Hasher[K, V]) int {
+func (n *mapArrayNode[K, V]) indexOf(key K, h Hasher[K]) int {
 	for i := range n.entries {
 		if h.Equal(n.entries[i].key, key) {
 			return i
@@ -890,7 +890,7 @@ func (n *mapArrayNode[K, V]) indexOf(key K, h Hasher[K, V]) int {
 }
 
 // get returns the value for the given key.
-func (n *mapArrayNode[K, V]) get(key K, shift uint, keyHash uint32, h Hasher[K, V]) (value V, ok bool) {
+func (n *mapArrayNode[K, V]) get(key K, shift uint, keyHash uint32, h Hasher[K]) (value V, ok bool) {
 	i := n.indexOf(key, h)
 	if i == -1 {
 		return *new(V), false
@@ -900,7 +900,7 @@ func (n *mapArrayNode[K, V]) get(key K, shift uint, keyHash uint32, h Hasher[K, 
 
 // set inserts or updates the value for a given key. If the key is inserted and
 // the new size crosses the max size threshold, a bitmap indexed node is returned.
-func (n *mapArrayNode[K, V]) set(key K, value V, shift uint, keyHash uint32, h Hasher[K, V], mutable bool, resized *bool) mapNode[K, V] {
+func (n *mapArrayNode[K, V]) set(key K, value V, shift uint, keyHash uint32, h Hasher[K], mutable bool, resized *bool) mapNode[K, V] {
 	idx := n.indexOf(key, h)
 
 	// Mark as resized if the key doesn't exist.
@@ -945,7 +945,7 @@ func (n *mapArrayNode[K, V]) set(key K, value V, shift uint, keyHash uint32, h H
 
 // delete removes the given key from the node. Returns the same node if key does
 // not exist. Returns a nil node when removing the last entry.
-func (n *mapArrayNode[K, V]) delete(key K, shift uint, keyHash uint32, h Hasher[K, V], mutable bool, resized *bool) mapNode[K, V] {
+func (n *mapArrayNode[K, V]) delete(key K, shift uint, keyHash uint32, h Hasher[K], mutable bool, resized *bool) mapNode[K, V] {
 	idx := n.indexOf(key, h)
 
 	// Return original node if key does not exist.
@@ -983,7 +983,7 @@ type mapBitmapIndexedNode[K any, V any] struct {
 }
 
 // get returns the value for the given key.
-func (n *mapBitmapIndexedNode[K, V]) get(key K, shift uint, keyHash uint32, h Hasher[K, V]) (value V, ok bool) {
+func (n *mapBitmapIndexedNode[K, V]) get(key K, shift uint, keyHash uint32, h Hasher[K]) (value V, ok bool) {
 	bit := uint32(1) << ((keyHash >> shift) & mapNodeMask)
 	if (n.bitmap & bit) == 0 {
 		return *new(V), false
@@ -994,7 +994,7 @@ func (n *mapBitmapIndexedNode[K, V]) get(key K, shift uint, keyHash uint32, h Ha
 
 // set inserts or updates the value for the given key. If a new key is inserted
 // and the size crosses the max size threshold then a hash array node is returned.
-func (n *mapBitmapIndexedNode[K, V]) set(key K, value V, shift uint, keyHash uint32, h Hasher[K, V], mutable bool, resized *bool) mapNode[K, V] {
+func (n *mapBitmapIndexedNode[K, V]) set(key K, value V, shift uint, keyHash uint32, h Hasher[K], mutable bool, resized *bool) mapNode[K, V] {
 	// Extract the index for the bit segment of the key hash.
 	keyHashFrag := (keyHash >> shift) & mapNodeMask
 
@@ -1066,7 +1066,7 @@ func (n *mapBitmapIndexedNode[K, V]) set(key K, value V, shift uint, keyHash uin
 // delete removes the key from the tree. If the key does not exist then the
 // original node is returned. If removing the last child node then a nil is
 // returned. Note that shrinking the node will not convert it to an array node.
-func (n *mapBitmapIndexedNode[K, V]) delete(key K, shift uint, keyHash uint32, h Hasher[K, V], mutable bool, resized *bool) mapNode[K, V] {
+func (n *mapBitmapIndexedNode[K, V]) delete(key K, shift uint, keyHash uint32, h Hasher[K], mutable bool, resized *bool) mapNode[K, V] {
 	bit := uint32(1) << ((keyHash >> shift) & mapNodeMask)
 
 	// Return original node if key does not exist.
@@ -1135,7 +1135,7 @@ func (n *mapHashArrayNode[K, V]) clone() *mapHashArrayNode[K, V] {
 }
 
 // get returns the value for the given key.
-func (n *mapHashArrayNode[K, V]) get(key K, shift uint, keyHash uint32, h Hasher[K, V]) (value V, ok bool) {
+func (n *mapHashArrayNode[K, V]) get(key K, shift uint, keyHash uint32, h Hasher[K]) (value V, ok bool) {
 	node := n.nodes[(keyHash>>shift)&mapNodeMask]
 	if node == nil {
 		return *new(V), false
@@ -1144,7 +1144,7 @@ func (n *mapHashArrayNode[K, V]) get(key K, shift uint, keyHash uint32, h Hasher
 }
 
 // set returns a node with the value set for the given key.
-func (n *mapHashArrayNode[K, V]) set(key K, value V, shift uint, keyHash uint32, h Hasher[K, V], mutable bool, resized *bool) mapNode[K, V] {
+func (n *mapHashArrayNode[K, V]) set(key K, value V, shift uint, keyHash uint32, h Hasher[K], mutable bool, resized *bool) mapNode[K, V] {
 	idx := (keyHash >> shift) & mapNodeMask
 	node := n.nodes[idx]
 
@@ -1175,7 +1175,7 @@ func (n *mapHashArrayNode[K, V]) set(key K, value V, shift uint, keyHash uint32,
 // delete returns a node with the given key removed. Returns the same node if
 // the key does not exist. If node shrinks to within bitmap-indexed size then
 // converts to a bitmap-indexed node.
-func (n *mapHashArrayNode[K, V]) delete(key K, shift uint, keyHash uint32, h Hasher[K, V], mutable bool, resized *bool) mapNode[K, V] {
+func (n *mapHashArrayNode[K, V]) delete(key K, shift uint, keyHash uint32, h Hasher[K], mutable bool, resized *bool) mapNode[K, V] {
 	idx := (keyHash >> shift) & mapNodeMask
 	node := n.nodes[idx]
 
@@ -1240,7 +1240,7 @@ func (n *mapValueNode[K, V]) keyHashValue() uint32 {
 }
 
 // get returns the value for the given key.
-func (n *mapValueNode[K, V]) get(key K, shift uint, keyHash uint32, h Hasher[K, V]) (value V, ok bool) {
+func (n *mapValueNode[K, V]) get(key K, shift uint, keyHash uint32, h Hasher[K]) (value V, ok bool) {
 	if !h.Equal(n.key, key) {
 		return *new(V), false
 	}
@@ -1251,7 +1251,7 @@ func (n *mapValueNode[K, V]) get(key K, shift uint, keyHash uint32, h Hasher[K, 
 // the node's key then a new value node is returned. If key is not equal to the
 // node's key but has the same hash then a hash collision node is returned.
 // Otherwise the nodes are merged into a branch node.
-func (n *mapValueNode[K, V]) set(key K, value V, shift uint, keyHash uint32, h Hasher[K, V], mutable bool, resized *bool) mapNode[K, V] {
+func (n *mapValueNode[K, V]) set(key K, value V, shift uint, keyHash uint32, h Hasher[K], mutable bool, resized *bool) mapNode[K, V] {
 	// If the keys match then return a new value node overwriting the value.
 	if h.Equal(n.key, key) {
 		// Update in-place if mutable.
@@ -1278,7 +1278,7 @@ func (n *mapValueNode[K, V]) set(key K, value V, shift uint, keyHash uint32, h H
 }
 
 // delete returns nil if the key matches the node's key. Otherwise returns the original node.
-func (n *mapValueNode[K, V]) delete(key K, shift uint, keyHash uint32, h Hasher[K, V], mutable bool, resized *bool) mapNode[K, V] {
+func (n *mapValueNode[K, V]) delete(key K, shift uint, keyHash uint32, h Hasher[K], mutable bool, resized *bool) mapNode[K, V] {
 	// Return original node if the keys do not match.
 	if !h.Equal(n.key, key) {
 		return n
@@ -1303,7 +1303,7 @@ func (n *mapHashCollisionNode[K, V]) keyHashValue() uint32 {
 
 // indexOf returns the index of the entry for the given key.
 // Returns -1 if the key does not exist in the node.
-func (n *mapHashCollisionNode[K, V]) indexOf(key K, h Hasher[K, V]) int {
+func (n *mapHashCollisionNode[K, V]) indexOf(key K, h Hasher[K]) int {
 	for i := range n.entries {
 		if h.Equal(n.entries[i].key, key) {
 			return i
@@ -1313,7 +1313,7 @@ func (n *mapHashCollisionNode[K, V]) indexOf(key K, h Hasher[K, V]) int {
 }
 
 // get returns the value for the given key.
-func (n *mapHashCollisionNode[K, V]) get(key K, shift uint, keyHash uint32, h Hasher[K, V]) (value V, ok bool) {
+func (n *mapHashCollisionNode[K, V]) get(key K, shift uint, keyHash uint32, h Hasher[K]) (value V, ok bool) {
 	for i := range n.entries {
 		if h.Equal(n.entries[i].key, key) {
 			return n.entries[i].value, true
@@ -1323,7 +1323,7 @@ func (n *mapHashCollisionNode[K, V]) get(key K, shift uint, keyHash uint32, h Ha
 }
 
 // set returns a copy of the node with key set to the given value.
-func (n *mapHashCollisionNode[K, V]) set(key K, value V, shift uint, keyHash uint32, h Hasher[K, V], mutable bool, resized *bool) mapNode[K, V] {
+func (n *mapHashCollisionNode[K, V]) set(key K, value V, shift uint, keyHash uint32, h Hasher[K], mutable bool, resized *bool) mapNode[K, V] {
 	// Merge node with key/value pair if this is not a hash collision.
 	if n.keyHash != keyHash {
 		*resized = true
@@ -1360,7 +1360,7 @@ func (n *mapHashCollisionNode[K, V]) set(key K, value V, shift uint, keyHash uin
 // delete returns a node with the given key deleted. Returns the same node if
 // the key does not exist. If removing the key would shrink the node to a single
 // entry then a value node is returned.
-func (n *mapHashCollisionNode[K, V]) delete(key K, shift uint, keyHash uint32, h Hasher[K, V], mutable bool, resized *bool) mapNode[K, V] {
+func (n *mapHashCollisionNode[K, V]) delete(key K, shift uint, keyHash uint32, h Hasher[K], mutable bool, resized *bool) mapNode[K, V] {
 	idx := n.indexOf(key, h)
 
 	// Return original node if key is not found.
@@ -1450,10 +1450,10 @@ func (itr *MapIterator[K, V]) First() {
 }
 
 // Next returns the next key/value pair. Returns a nil key when no elements remain.
-func (itr *MapIterator[K, V]) Next() (key K, value V) {
+func (itr *MapIterator[K, V]) Next() (key K, value V, hasNext bool) {
 	// Return nil key if iteration is done.
 	if itr.Done() {
-		return *new(K), *new(V)
+		return *new(K), *new(V), false
 	}
 
 	// Retrieve current index & value. Current node is always a leaf.
@@ -1472,7 +1472,7 @@ func (itr *MapIterator[K, V]) Next() (key K, value V) {
 	// Move up stack until we find a node that has remaining position ahead
 	// and move that element forward by one.
 	itr.next()
-	return key, value
+	return key, value, true
 }
 
 // next moves to the next available key.
@@ -2057,10 +2057,10 @@ func (itr *SortedMapIterator[K, V]) Seek(key K) {
 
 // Next returns the current key/value pair and moves the iterator forward.
 // Returns a nil key if the there are no more elements to return.
-func (itr *SortedMapIterator[K, V]) Next() (key K, value V) {
+func (itr *SortedMapIterator[K, V]) Next() (key K, value V, ok bool) {
 	// Return nil key if iteration is complete.
 	if itr.Done() {
-		return *new(K), *new(V)
+		return *new(K), *new(V), false
 	}
 
 	// Retrieve current key/value pair.
@@ -2073,7 +2073,7 @@ func (itr *SortedMapIterator[K, V]) Next() (key K, value V) {
 	itr.next()
 
 	// Only occurs when iterator is done.
-	return key, value
+	return key, value, true
 }
 
 // next moves to the next key. If no keys are after then depth is set to -1.
@@ -2101,10 +2101,10 @@ func (itr *SortedMapIterator[K, V]) next() {
 
 // Prev returns the current key/value pair and moves the iterator backward.
 // Returns a nil key if the there are no more elements to return.
-func (itr *SortedMapIterator[K, V]) Prev() (key K, value V) {
+func (itr *SortedMapIterator[K, V]) Prev() (key K, value V, ok bool) {
 	// Return nil key if iteration is complete.
 	if itr.Done() {
-		return *new(K), *new(V)
+		return *new(K), *new(V), false
 	}
 
 	// Retrieve current key/value pair.
@@ -2114,7 +2114,7 @@ func (itr *SortedMapIterator[K, V]) Prev() (key K, value V) {
 	key, value = leafEntry.key, leafEntry.value
 
 	itr.prev()
-	return key, value
+	return key, value, true
 }
 
 // prev moves to the previous key. If no keys are before then depth is set to -1.
@@ -2202,7 +2202,7 @@ type sortedMapIteratorElem[K any, V any] struct {
 }
 
 // Hasher hashes keys and checks them for equality.
-type Hasher[K any, V any] interface {
+type Hasher[K any] interface {
 	// Computes a 32-bit hash for key.
 	Hash(key K) uint32
 
@@ -2256,153 +2256,173 @@ type Hasher[K any, V any] interface {
 //	panic(fmt.Sprintf("immutable.NewHasher: must set hasher for %T type", key))
 //}
 
+var _ Hasher[int] = &intHasher{}
+
 // intHasher implements Hasher for int keys.
 type intHasher struct{}
 
 // Hash returns a hash for key.
-func (h *intHasher) Hash(key interface{}) uint32 {
-	return hashUint64(uint64(key.(int)))
+func (h *intHasher) Hash(key int) uint32 {
+	return hashUint64(uint64(key))
 }
 
 // Equal returns true if a is equal to b. Otherwise returns false.
 // Panics if a and b are not ints.
-func (h *intHasher) Equal(a, b interface{}) bool {
-	return a.(int) == b.(int)
+func (h *intHasher) Equal(a, b int) bool {
+	return a == b
 }
+
+var _ Hasher[int8] = &int8Hasher{}
 
 // int8Hasher implements Hasher for int8 keys.
 type int8Hasher struct{}
 
 // Hash returns a hash for key.
-func (h *int8Hasher) Hash(key interface{}) uint32 {
-	return hashUint64(uint64(key.(int8)))
+func (h *int8Hasher) Hash(key int8) uint32 {
+	return hashUint64(uint64(key))
 }
 
 // Equal returns true if a is equal to b. Otherwise returns false.
 // Panics if a and b are not int8s.
-func (h *int8Hasher) Equal(a, b interface{}) bool {
-	return a.(int8) == b.(int8)
+func (h *int8Hasher) Equal(a, b int8) bool {
+	return a == b
 }
+
+var _ Hasher[int16] = &int16Hasher{}
 
 // int16Hasher implements Hasher for int16 keys.
 type int16Hasher struct{}
 
 // Hash returns a hash for key.
-func (h *int16Hasher) Hash(key interface{}) uint32 {
-	return hashUint64(uint64(key.(int16)))
+func (h *int16Hasher) Hash(key int16) uint32 {
+	return hashUint64(uint64(key))
 }
 
 // Equal returns true if a is equal to b. Otherwise returns false.
 // Panics if a and b are not int16s.
-func (h *int16Hasher) Equal(a, b interface{}) bool {
-	return a.(int16) == b.(int16)
+func (h *int16Hasher) Equal(a, b int16) bool {
+	return a == b
 }
+
+var _ Hasher[int32] = &int32Hasher{}
 
 // int32Hasher implements Hasher for int32 keys.
 type int32Hasher struct{}
 
 // Hash returns a hash for key.
-func (h *int32Hasher) Hash(key interface{}) uint32 {
-	return hashUint64(uint64(key.(int32)))
+func (h *int32Hasher) Hash(key int32) uint32 {
+	return hashUint64(uint64(key))
 }
 
 // Equal returns true if a is equal to b. Otherwise returns false.
 // Panics if a and b are not int32s.
-func (h *int32Hasher) Equal(a, b interface{}) bool {
-	return a.(int32) == b.(int32)
+func (h *int32Hasher) Equal(a, b int32) bool {
+	return a == b
 }
+
+var _ Hasher[int64] = &int64Hasher{}
 
 // int64Hasher implements Hasher for int64 keys.
 type int64Hasher struct{}
 
 // Hash returns a hash for key.
-func (h *int64Hasher) Hash(key interface{}) uint32 {
-	return hashUint64(uint64(key.(int64)))
+func (h *int64Hasher) Hash(key int64) uint32 {
+	return hashUint64(uint64(key))
 }
 
 // Equal returns true if a is equal to b. Otherwise returns false.
 // Panics if a and b are not int64s.
-func (h *int64Hasher) Equal(a, b interface{}) bool {
-	return a.(int64) == b.(int64)
+func (h *int64Hasher) Equal(a, b int64) bool {
+	return a == b
 }
+
+var _ Hasher[uint] = &uintHasher{}
 
 // uintHasher implements Hasher for uint keys.
 type uintHasher struct{}
 
 // Hash returns a hash for key.
-func (h *uintHasher) Hash(key interface{}) uint32 {
-	return hashUint64(uint64(key.(uint)))
+func (h *uintHasher) Hash(key uint) uint32 {
+	return hashUint64(uint64(key))
 }
 
 // Equal returns true if a is equal to b. Otherwise returns false.
 // Panics if a and b are not uints.
-func (h *uintHasher) Equal(a, b interface{}) bool {
-	return a.(uint) == b.(uint)
+func (h *uintHasher) Equal(a, b uint) bool {
+	return a == b
 }
+
+var _ Hasher[uint8] = &uint8Hasher{}
 
 // uint8Hasher implements Hasher for uint8 keys.
 type uint8Hasher struct{}
 
 // Hash returns a hash for key.
-func (h *uint8Hasher) Hash(key interface{}) uint32 {
-	return hashUint64(uint64(key.(uint8)))
+func (h *uint8Hasher) Hash(key uint8) uint32 {
+	return hashUint64(uint64(key))
 }
 
 // Equal returns true if a is equal to b. Otherwise returns false.
 // Panics if a and b are not uint8s.
-func (h *uint8Hasher) Equal(a, b interface{}) bool {
-	return a.(uint8) == b.(uint8)
+func (h *uint8Hasher) Equal(a, b uint8) bool {
+	return a == b
 }
+
+var _ Hasher[uint16] = &uint16Hasher{}
 
 // uint16Hasher implements Hasher for uint16 keys.
 type uint16Hasher struct{}
 
 // Hash returns a hash for key.
-func (h *uint16Hasher) Hash(key interface{}) uint32 {
-	return hashUint64(uint64(key.(uint16)))
+func (h *uint16Hasher) Hash(key uint16) uint32 {
+	return hashUint64(uint64(key))
 }
 
 // Equal returns true if a is equal to b. Otherwise returns false.
 // Panics if a and b are not uint16s.
-func (h *uint16Hasher) Equal(a, b interface{}) bool {
-	return a.(uint16) == b.(uint16)
+func (h *uint16Hasher) Equal(a, b uint16) bool {
+	return a == b
 }
+
+var _ Hasher[uint32] = &uint32Hasher{}
 
 // uint32Hasher implements Hasher for uint32 keys.
 type uint32Hasher struct{}
 
 // Hash returns a hash for key.
-func (h *uint32Hasher) Hash(key interface{}) uint32 {
-	return hashUint64(uint64(key.(uint32)))
+func (h *uint32Hasher) Hash(key uint32) uint32 {
+	return hashUint64(uint64(key))
 }
 
 // Equal returns true if a is equal to b. Otherwise returns false.
 // Panics if a and b are not uint32s.
-func (h *uint32Hasher) Equal(a, b interface{}) bool {
-	return a.(uint32) == b.(uint32)
+func (h *uint32Hasher) Equal(a, b uint32) bool {
+	return a == b
 }
+
+var _ Hasher[uint64] = &uint64Hasher{}
 
 // uint64Hasher implements Hasher for uint64 keys.
 type uint64Hasher struct{}
 
 // Hash returns a hash for key.
-func (h *uint64Hasher) Hash(key interface{}) uint32 {
-	return hashUint64(key.(uint64))
+func (h *uint64Hasher) Hash(key uint64) uint32 {
+	return hashUint64(key)
 }
 
 // Equal returns true if a is equal to b. Otherwise returns false.
 // Panics if a and b are not uint64s.
-func (h *uint64Hasher) Equal(a, b interface{}) bool {
-	return a.(uint64) == b.(uint64)
+func (h *uint64Hasher) Equal(a, b uint64) bool {
+	return a == b
 }
 
 // stringHasher implements Hasher for string keys.
 type stringHasher struct{}
 
 // Hash returns a hash for value.
-func (h *stringHasher) Hash(value interface{}) uint32 {
+func (h *stringHasher) Hash(value string) uint32 {
 	var hash uint32
-	for i, value := 0, value.(string); i < len(value); i++ {
+	for i := 0; i < len(value); i++ {
 		hash = 31*hash + uint32(value[i])
 	}
 	return hash
@@ -2410,17 +2430,17 @@ func (h *stringHasher) Hash(value interface{}) uint32 {
 
 // Equal returns true if a is equal to b. Otherwise returns false.
 // Panics if a and b are not strings.
-func (h *stringHasher) Equal(a, b interface{}) bool {
-	return a.(string) == b.(string)
+func (h *stringHasher) Equal(a, b string) bool {
+	return a == b
 }
 
 // byteSliceHasher implements Hasher for byte slice keys.
 type byteSliceHasher struct{}
 
 // Hash returns a hash for value.
-func (h *byteSliceHasher) Hash(value interface{}) uint32 {
+func (h *byteSliceHasher) Hash(value []byte) uint32 {
 	var hash uint32
-	for i, value := 0, value.([]byte); i < len(value); i++ {
+	for i := 0; i < len(value); i++ {
 		hash = 31*hash + uint32(value[i])
 	}
 	return hash
@@ -2428,8 +2448,8 @@ func (h *byteSliceHasher) Hash(value interface{}) uint32 {
 
 // Equal returns true if a is equal to b. Otherwise returns false.
 // Panics if a and b are not byte slices.
-func (h *byteSliceHasher) Equal(a, b interface{}) bool {
-	return bytes.Equal(a.([]byte), b.([]byte))
+func (h *byteSliceHasher) Equal(a, b []byte) bool {
+	return bytes.Equal(a, b)
 }
 
 // reflectIntHasher implements a reflection-based Hasher for int keys.
