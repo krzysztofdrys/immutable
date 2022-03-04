@@ -602,7 +602,7 @@ func ExampleListBuilder_Slice() {
 // Ensure node can support overwrites as it expands.
 func TestInternal_mapNode_Overwrite(t *testing.T) {
 	const n = 1000
-	var h intHasher
+	var h NumberHasher[int]
 	var node mapNode[int, int] = &mapArrayNode[int, int]{}
 	for i := 0; i < n; i++ {
 		var resized bool
@@ -637,7 +637,7 @@ func TestInternal_mapNode_Overwrite(t *testing.T) {
 func TestInternal_mapArrayNode(t *testing.T) {
 	// Ensure 8 or fewer elements stays in an array node.
 	t.Run("Append", func(t *testing.T) {
-		var h intHasher
+		var h NumberHasher[int]
 		n := &mapArrayNode[int, int]{}
 		for i := 0; i < 8; i++ {
 			var resized bool
@@ -656,7 +656,7 @@ func TestInternal_mapArrayNode(t *testing.T) {
 
 	// Ensure 8 or fewer elements stays in an array node when inserted in reverse.
 	t.Run("Prepend", func(t *testing.T) {
-		var h intHasher
+		var h NumberHasher[int]
 		n := &mapArrayNode[int, int]{}
 		for i := 7; i >= 0; i-- {
 			var resized bool
@@ -675,7 +675,7 @@ func TestInternal_mapArrayNode(t *testing.T) {
 
 	// Ensure array can transition between node types.
 	t.Run("Expand", func(t *testing.T) {
-		var h intHasher
+		var h NumberHasher[int]
 		var n mapNode[int, int] = &mapArrayNode[int, int]{}
 		for i := 0; i < 100; i++ {
 			var resized bool
@@ -694,7 +694,7 @@ func TestInternal_mapArrayNode(t *testing.T) {
 
 	// Ensure deleting elements returns the correct new node.
 	RunRandom(t, "Delete", func(t *testing.T, rand *rand.Rand) {
-		var h intHasher
+		var h NumberHasher[int]
 		var n mapNode[int, int] = &mapArrayNode[int, int]{}
 		for i := 0; i < 8; i++ {
 			var resized bool
@@ -713,7 +713,7 @@ func TestInternal_mapArrayNode(t *testing.T) {
 
 func TestInternal_mapValueNode(t *testing.T) {
 	t.Run("Simple", func(t *testing.T) {
-		var h intHasher
+		var h NumberHasher[int]
 		n := newMapValueNode(h.Hash(2), 2, 3)
 		if v, ok := n.get(2, 0, h.Hash(2), &h); !ok {
 			t.Fatal("expected ok")
@@ -723,7 +723,7 @@ func TestInternal_mapValueNode(t *testing.T) {
 	})
 
 	t.Run("KeyEqual", func(t *testing.T) {
-		var h intHasher
+		var h NumberHasher[int]
 		var resized bool
 		n := newMapValueNode(h.Hash(2), 2, 3)
 		other := n.set(2, 4, 0, h.Hash(2), &h, false, &resized).(*mapValueNode[int, int])
@@ -770,7 +770,7 @@ func TestInternal_mapValueNode(t *testing.T) {
 	t.Run("MergeNode", func(t *testing.T) {
 		// Inserting into a node with a different index in the mask should split into a bitmap node.
 		t.Run("NoConflict", func(t *testing.T) {
-			var h intHasher
+			var h NumberHasher[int]
 			var resized bool
 			n := newMapValueNode(h.Hash(2), 2, 3)
 			other := n.set(4, 5, 0, h.Hash(4), &h, false, &resized).(*mapBitmapIndexedNode[int, int])
@@ -806,7 +806,7 @@ func TestInternal_mapValueNode(t *testing.T) {
 
 		// Reversing the nodes from NoConflict should yield the same result.
 		t.Run("NoConflictReverse", func(t *testing.T) {
-			var h intHasher
+			var h NumberHasher[int]
 			var resized bool
 			n := newMapValueNode(h.Hash(4), 4, 5)
 			other := n.set(2, 3, 0, h.Hash(2), &h, false, &resized).(*mapBitmapIndexedNode[int, int])
@@ -890,7 +890,7 @@ func TestInternal_mapValueNode(t *testing.T) {
 
 func TestMap_Get(t *testing.T) {
 	t.Run("Empty", func(t *testing.T) {
-		m := NewMap[int, int](&intHasher{})
+		m := NewMap[int, int](&NumberHasher[int]{})
 		if v, ok := m.Get(100); ok {
 			t.Fatalf("unexpected value: <%v,%v>", v, ok)
 		}
@@ -899,7 +899,7 @@ func TestMap_Get(t *testing.T) {
 
 func TestMap_Set(t *testing.T) {
 	t.Run("Simple", func(t *testing.T) {
-		m := NewMap[int, int](&intHasher{})
+		m := NewMap[int, int](&NumberHasher[int]{})
 		itr := m.Iterator()
 		if !itr.Done() {
 			t.Fatal("MapIterator.Done()=true, expected false")
@@ -909,7 +909,7 @@ func TestMap_Set(t *testing.T) {
 	})
 
 	t.Run("Simple", func(t *testing.T) {
-		m := NewMap[int, string](&intHasher{})
+		m := NewMap[int, string](&NumberHasher[int]{})
 		m = m.Set(100, "foo")
 		if v, ok := m.Get(100); !ok || v != "foo" {
 			t.Fatalf("unexpected value: <%v,%v>", v, ok)
@@ -918,7 +918,7 @@ func TestMap_Set(t *testing.T) {
 
 	t.Run("VerySmall", func(t *testing.T) {
 		const n = 6
-		m := NewMap[int, int](&intHasher{})
+		m := NewMap[int, int](&NumberHasher[int]{})
 		for i := 0; i < n; i++ {
 			m = m.Set(i, i+1)
 		}
@@ -942,7 +942,7 @@ func TestMap_Set(t *testing.T) {
 
 	t.Run("Small", func(t *testing.T) {
 		const n = 1000
-		m := NewMap[int, int](&intHasher{})
+		m := NewMap[int, int](&NumberHasher[int]{})
 		for i := 0; i < n; i++ {
 			m = m.Set(i, i+1)
 		}
@@ -959,7 +959,7 @@ func TestMap_Set(t *testing.T) {
 		}
 
 		const n = 1000000
-		m := NewMap[int, int](&intHasher{})
+		m := NewMap[int, int](&NumberHasher[int]{})
 		for i := 0; i < n; i++ {
 			m = m.Set(i, i+1)
 		}
@@ -971,7 +971,7 @@ func TestMap_Set(t *testing.T) {
 	})
 
 	t.Run("StringKeys", func(t *testing.T) {
-		m := NewMap[string, string](&stringHasher{})
+		m := NewMap[string, string](&stringHasher[string]{})
 		m = m.Set("foo", "bar")
 		m = m.Set("baz", "bat")
 		m = m.Set("", "EMPTY")
@@ -988,7 +988,7 @@ func TestMap_Set(t *testing.T) {
 	})
 
 	t.Run("ByteSliceKeys", func(t *testing.T) {
-		m := NewMap[[]byte, string](&byteSliceHasher{})
+		m := NewMap[[]byte, string](&stringHasher[[]byte]{})
 		m = m.Set([]byte("foo"), "bar")
 		m = m.Set([]byte("baz"), "bat")
 		m = m.Set([]byte(""), "EMPTY")
@@ -1027,7 +1027,7 @@ func TestMap_Overwrite(t *testing.T) {
 	}
 
 	const n = 10000
-	m := NewMap[int, int](&intHasher{})
+	m := NewMap[int, int](&NumberHasher[int]{})
 	for i := 0; i < n; i++ {
 		// Set original value.
 		m = m.Set(i, i)
@@ -1048,7 +1048,7 @@ func TestMap_Overwrite(t *testing.T) {
 
 func TestMap_Delete(t *testing.T) {
 	t.Run("Empty", func(t *testing.T) {
-		m := NewMap[string, string](&stringHasher{})
+		m := NewMap[string, string](&stringHasher[string]{})
 		other := m.Delete("foo")
 		if m != other {
 			t.Fatal("expected same map")
@@ -1056,7 +1056,7 @@ func TestMap_Delete(t *testing.T) {
 	})
 
 	t.Run("Simple", func(t *testing.T) {
-		m := NewMap[int, string](&intHasher{})
+		m := NewMap[int, string](&NumberHasher[int]{})
 		m = m.Set(100, "foo")
 		if v, ok := m.Get(100); !ok || v != "foo" {
 			t.Fatalf("unexpected value: <%v,%v>", v, ok)
@@ -1065,7 +1065,7 @@ func TestMap_Delete(t *testing.T) {
 
 	t.Run("Small", func(t *testing.T) {
 		const n = 1000
-		m := NewMap[int, int](&intHasher{})
+		m := NewMap[int, int](&NumberHasher[int]{})
 		for i := 0; i < n; i++ {
 			m = m.Set(i, i+1)
 		}
@@ -1082,7 +1082,7 @@ func TestMap_Delete(t *testing.T) {
 			t.Skip("skipping: short")
 		}
 		const n = 1000000
-		m := NewMap[int, int](&intHasher{})
+		m := NewMap[int, int](&NumberHasher[int]{})
 		for i := 0; i < n; i++ {
 			m = m.Set(i, i+1)
 		}
@@ -1240,8 +1240,8 @@ type TMap struct {
 
 func NewTestMap() *TMap {
 	return &TMap{
-		im:      NewMap[int, int](&intHasher{}),
-		builder: NewMapBuilder[int, int](&intHasher{}),
+		im:      NewMap[int, int](&NumberHasher[int]{}),
+		builder: NewMapBuilder[int, int](&NumberHasher[int]{}),
 		std:     make(map[int]int),
 	}
 }
@@ -1354,7 +1354,7 @@ func BenchmarkBuiltinMap_Delete(b *testing.B) {
 
 func BenchmarkMap_Set(b *testing.B) {
 	b.ReportAllocs()
-	m := NewMap[int, int](&intHasher{})
+	m := NewMap[int, int](&NumberHasher[int]{})
 	for i := 0; i < b.N; i++ {
 		m = m.Set(i, i)
 	}
@@ -1363,7 +1363,7 @@ func BenchmarkMap_Set(b *testing.B) {
 func BenchmarkMap_Delete(b *testing.B) {
 	const n = 10000000
 
-	builder := NewMapBuilder[int, int](&intHasher{})
+	builder := NewMapBuilder[int, int](&NumberHasher[int]{})
 	for i := 0; i < n; i++ {
 		builder.Set(i, i)
 	}
@@ -1378,7 +1378,7 @@ func BenchmarkMap_Delete(b *testing.B) {
 
 func BenchmarkMap_Iterator(b *testing.B) {
 	const n = 10000
-	m := NewMap[int, int](&intHasher{})
+	m := NewMap[int, int](&NumberHasher[int]{})
 	for i := 0; i < 10000; i++ {
 		m = m.Set(i, i)
 	}
@@ -1398,7 +1398,7 @@ func BenchmarkMap_Iterator(b *testing.B) {
 
 func BenchmarkMapBuilder_Set(b *testing.B) {
 	b.ReportAllocs()
-	builder := NewMapBuilder[int, int](&intHasher{})
+	builder := NewMapBuilder[int, int](&NumberHasher[int]{})
 	for i := 0; i < b.N; i++ {
 		builder.Set(i, i)
 	}
@@ -1407,7 +1407,7 @@ func BenchmarkMapBuilder_Set(b *testing.B) {
 func BenchmarkMapBuilder_Delete(b *testing.B) {
 	const n = 10000000
 
-	builder := NewMapBuilder[int, int](&intHasher{})
+	builder := NewMapBuilder[int, int](&NumberHasher[int]{})
 	for i := 0; i < n; i++ {
 		builder.Set(i, i)
 	}
@@ -1420,7 +1420,7 @@ func BenchmarkMapBuilder_Delete(b *testing.B) {
 }
 
 func ExampleMap_Set() {
-	m := NewMap[string, interface{}](&stringHasher{})
+	m := NewMap[string, interface{}](&stringHasher[string]{})
 	m = m.Set("foo", "bar")
 	m = m.Set("baz", 100)
 
@@ -1439,7 +1439,7 @@ func ExampleMap_Set() {
 }
 
 func ExampleMap_Delete() {
-	m := NewMap[string, interface{}](&stringHasher{})
+	m := NewMap[string, interface{}](&stringHasher[string]{})
 	m = m.Set("foo", "bar")
 	m = m.Set("baz", 100)
 	m = m.Delete("baz")
@@ -1455,7 +1455,7 @@ func ExampleMap_Delete() {
 }
 
 func ExampleMap_Iterator() {
-	m := NewMap[string, int](&stringHasher{})
+	m := NewMap[string, int](&stringHasher[string]{})
 	m = m.Set("apple", 100)
 	m = m.Set("grape", 200)
 	m = m.Set("kiwi", 300)
@@ -1484,7 +1484,7 @@ func ExampleMap_Iterator() {
 }
 
 func ExampleMapBuilder_Set() {
-	b := NewMapBuilder[string, interface{}](&stringHasher{})
+	b := NewMapBuilder[string, interface{}](&stringHasher[string]{})
 	b.Set("foo", "bar")
 	b.Set("baz", 100)
 
@@ -1504,7 +1504,7 @@ func ExampleMapBuilder_Set() {
 }
 
 func ExampleMapBuilder_Delete() {
-	b := NewMapBuilder[string, interface{}](&stringHasher{})
+	b := NewMapBuilder[string, interface{}](&stringHasher[string]{})
 	b.Set("foo", "bar")
 	b.Set("baz", 100)
 	b.Delete("baz")
@@ -2040,36 +2040,46 @@ func TestSortedMap_Iterator(t *testing.T) {
 
 func TestNewHasher(t *testing.T) {
 	t.Run("builtin", func(t *testing.T) {
-		t.Run("int", func(t *testing.T) { testHasher[int](t, int(100), &intHasher{}) })
-		t.Run("int8", func(t *testing.T) { testHasher[int8](t, int8(100), &int8Hasher{}) })
-		t.Run("int16", func(t *testing.T) { testHasher[int16](t, int16(100), &int16Hasher{}) })
-		t.Run("int32", func(t *testing.T) { testHasher[int32](t, int32(100), &int32Hasher{}) })
-		t.Run("int64", func(t *testing.T) { testHasher[int64](t, int64(100), &int64Hasher{}) })
+		t.Run("int", func(t *testing.T) { testNumberHasher[int](t, int(100)) })
+		t.Run("int8", func(t *testing.T) { testNumberHasher[int8](t, int8(100)) })
+		t.Run("int16", func(t *testing.T) { testNumberHasher[int16](t, int16(100)) })
+		t.Run("int32", func(t *testing.T) { testNumberHasher[int32](t, int32(100)) })
+		t.Run("int64", func(t *testing.T) { testNumberHasher[int64](t, int64(100)) })
 
-		t.Run("uint", func(t *testing.T) { testHasher[uint](t, uint(100), &uintHasher{}) })
-		t.Run("uint8", func(t *testing.T) { testHasher[uint8](t, uint8(100), &uint8Hasher{}) })
-		t.Run("uint16", func(t *testing.T) { testHasher[uint16](t, uint16(100), &uint16Hasher{}) })
-		t.Run("uint32", func(t *testing.T) { testHasher[uint32](t, uint32(100), &uint32Hasher{}) })
-		t.Run("uint64", func(t *testing.T) { testHasher[uint64](t, uint64(100), &uint64Hasher{}) })
+		t.Run("uint", func(t *testing.T) { testNumberHasher[uint](t, uint(100)) })
+		t.Run("uint8", func(t *testing.T) { testNumberHasher[uint8](t, uint8(100)) })
+		t.Run("uint16", func(t *testing.T) { testNumberHasher[uint16](t, uint16(100)) })
+		t.Run("uint32", func(t *testing.T) { testNumberHasher[uint32](t, uint32(100)) })
+		t.Run("uint64", func(t *testing.T) { testNumberHasher[uint64](t, uint64(100)) })
 
-		t.Run("string", func(t *testing.T) { testHasher[string](t, "foo", &stringHasher{}) })
-		t.Run("byteSlice", func(t *testing.T) { testHasher[[]byte](t, []byte("foo"), &byteSliceHasher{}) })
+		t.Run("string", func(t *testing.T) { testStringHasher[string](t, "foo") })
+		t.Run("byteSlice", func(t *testing.T) { testStringHasher[[]byte](t, []byte("foo")) })
 	})
 
-	//t.Run("reflection", func(t *testing.T) {
-	//	type Int int
-	//	t.Run("int", func(t *testing.T) { testHasher(t, Int(100)) })
-	//
-	//	type Uint uint
-	//	t.Run("uint", func(t *testing.T) { testHasher(t, Uint(100)) })
-	//
-	//	type String string
-	//	t.Run("string", func(t *testing.T) { testHasher(t, String("foo")) })
-	//})
+	t.Run("reflection", func(t *testing.T) {
+		type Int int
+		t.Run("int", func(t *testing.T) { testNumberHasher(t, Int(100)) })
+
+		type Uint uint
+		t.Run("uint", func(t *testing.T) { testNumberHasher(t, Uint(100)) })
+
+		type String string
+		t.Run("string", func(t *testing.T) { testStringHasher(t, String("foo")) })
+	})
 }
 
-func testHasher[T any](t *testing.T, v T, h Hasher[T]) {
+func testStringHasher[T stringLike](t *testing.T, v T) {
 	t.Helper()
+	h := &stringHasher[T]{}
+	h.Hash(v)
+	if !h.Equal(v, v) {
+		t.Fatal("expected hash equality")
+	}
+}
+
+func testNumberHasher[T number](t *testing.T, v T) {
+	t.Helper()
+	h := NumberHasher[T]{}
 	h.Hash(v)
 	if !h.Equal(v, v) {
 		t.Fatal("expected hash equality")

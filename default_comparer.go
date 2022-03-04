@@ -6,6 +6,12 @@ type orderable interface {
 
 var _ Comparer[int] = &DefaultComparer[int]{}
 
+type comparerImp[T orderable] struct{}
+
+func (i comparerImp[T]) comparer() Comparer[T] {
+	return &DefaultComparer[T]{}
+}
+
 type DefaultComparer[T orderable] struct{}
 
 func (c DefaultComparer[T]) Compare(x, y T) int {
